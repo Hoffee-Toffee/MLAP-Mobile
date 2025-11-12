@@ -5,7 +5,9 @@ buildscript {
         compileSdkVersion = 36
         targetSdkVersion = 36
         ndkVersion = "27.1.12297006"
-        kotlinVersion = "2.1.20"
+        // Use a stable Kotlin version compatible with many RN native modules
+        // (react-native-track-player's Kotlin sources are known to compile with 1.8.x)
+        kotlinVersion = "1.8.22"
     }
     repositories {
         google()

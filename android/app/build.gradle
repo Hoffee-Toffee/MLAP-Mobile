@@ -52,6 +52,9 @@ react {
 
     /* Autolinking */
     autolinkLibrariesWithApp()
+
+    /* Disable new architecture to fix TrackPlayer compatibility */
+    newArchEnabled = false
 }
 
 /**
@@ -117,3 +120,6 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// Make sure react-native-vector-icons fonts are copied into the APK
+apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
