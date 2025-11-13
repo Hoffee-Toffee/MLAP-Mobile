@@ -9,18 +9,27 @@ import React from 'react';
 import { StatusBar, StyleSheet, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as PaperProvider } from 'react-native-paper';
-import HomeScreen from './src/screens/HomeScreen';
+import AppNavigator from './src/navigation/AppNavigator';
+import { MultiQueueProvider } from './src/context/MultiQueueContext';
+import { PlayerProvider } from './src/context/PlayerContext';
+import { QueueProvider } from './src/context/QueueContext';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
-    <SafeAreaProvider>
-      <PaperProvider>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        <HomeScreen />
-      </PaperProvider>
-    </SafeAreaProvider>
+    <PlayerProvider>
+      <QueueProvider>
+        <MultiQueueProvider>
+          <SafeAreaProvider>
+            <PaperProvider>
+              <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+              <AppNavigator />
+            </PaperProvider>
+          </SafeAreaProvider>
+        </MultiQueueProvider>
+      </QueueProvider>
+    </PlayerProvider>
   );
 }
 
