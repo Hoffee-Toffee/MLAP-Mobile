@@ -1,5 +1,5 @@
 import React from 'react';
-import { Appbar, Menu, useTheme } from 'react-native-paper';
+import { Appbar, Modal, Portal, useTheme, Button } from 'react-native-paper';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useMultiQueue } from '../context/MultiQueueContext';
 
@@ -11,41 +11,45 @@ const QUEUE_LABELS = {
 
 const TopBar: React.FC<{ onMenuPress: () => void }> = ({ onMenuPress }) => {
   const { selectedQueue, setSelectedQueue } = useMultiQueue();
-  const [menuVisible, setMenuVisible] = React.useState(false);
+  const [modalVisible, setModalVisible] = React.useState(false);
   const theme = useTheme();
 
   return (
     <Appbar.Header>
       <Appbar.Action icon="menu" onPress={onMenuPress} />
       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-        <Menu
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
-          anchor={
-            <TouchableOpacity
-              style={styles.anchorTouchable}
-              activeOpacity={0.7}
-              onPress={() => setMenuVisible(true)}
-            >
-              <View style={styles.anchorRow}>
-                <Text style={[styles.anchorText, { color: theme.colors.onPrimary }]}>{QUEUE_LABELS[selectedQueue]}</Text>
-                <Appbar.Action icon={menuVisible ? 'chevron-up' : 'chevron-down'} color={theme.colors.onPrimary} onPress={() => setMenuVisible(true)} />
-              </View>
-            </TouchableOpacity>
-          }
+        <TouchableOpacity
+          style={styles.anchorTouchable}
+          activeOpacity={0.7}
+          onPress={() => setModalVisible(true)}
         >
-          {Object.entries(QUEUE_LABELS).map(([id, label]) => (
-            <Menu.Item
-              key={id}
-              title={label}
-              onPress={() => {
-                setSelectedQueue(id as any);
-                setMenuVisible(false);
-              }}
-              disabled={selectedQueue === id}
-            />
-          ))}
-        </Menu>
+          <View style={styles.anchorRow}>
+            <Text style={[styles.anchorText, { color: theme.colors.onPrimary }]}>{QUEUE_LABELS[selectedQueue]}</Text>
+            <Appbar.Action icon={modalVisible ? 'chevron-up' : 'chevron-down'} color={theme.colors.onPrimary} onPress={() => setModalVisible(true)} />
+          </View>
+        </TouchableOpacity>
+        <Portal>
+          <Modal visible={modalVisible} onDismiss={() => setModalVisible(false)} contentContainerStyle={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Select Queue</Text>
+            {Object.entries(QUEUE_LABELS).map(([id, label]) => (
+              <Button
+                key={id}
+                mode={selectedQueue === id ? 'contained' : 'outlined'}
+                onPress={() => {
+                  setSelectedQueue(id as any);
+                  setModalVisible(false);
+                }}
+                style={styles.modalButton}
+                disabled={selectedQueue === id}
+              >
+                {label}
+              </Button>
+            ))}
+            <Button onPress={() => setModalVisible(false)} style={styles.modalButton}>
+              Cancel
+            </Button>
+          </Modal>
+        </Portal>
       </View>
     </Appbar.Header>
   );
@@ -67,6 +71,23 @@ const styles = StyleSheet.create({
     fontSize: 20,
     letterSpacing: 1,
     marginRight: 4,
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    padding: 24,
+    margin: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    marginBottom: 16,
+  },
+  modalButton: {
+    marginVertical: 6,
+    minWidth: 180,
   },
 });
 

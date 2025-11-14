@@ -11,14 +11,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as PaperProvider } from 'react-native-paper';
 import AppNavigator from './src/navigation/AppNavigator';
 import { MultiQueueProvider } from './src/context/MultiQueueContext';
-import { PlayerProvider } from './src/context/PlayerContext';
+import { PerQueuePlayerProvider } from './src/context/PerQueuePlayerContext';
 import { QueueProvider } from './src/context/QueueContext';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
-    <PlayerProvider>
+    <PerQueuePlayerProvider>
       <QueueProvider>
         <MultiQueueProvider>
           <SafeAreaProvider>
@@ -29,7 +29,7 @@ function App() {
           </SafeAreaProvider>
         </MultiQueueProvider>
       </QueueProvider>
-    </PlayerProvider>
+    </PerQueuePlayerProvider>
   );
 }
 

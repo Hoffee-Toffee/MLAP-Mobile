@@ -2,7 +2,7 @@ import React from 'react';
 import { FlatList } from 'react-native';
 import { ScannedTrack } from '../utils/musicScanner';
 import SongItem from './SongItem';
-import { useQueue } from '../context/QueueContext';
+import { usePerQueuePlayer } from '../context/PerQueuePlayerContext';
 import { useMultiQueue } from '../context/MultiQueueContext';
 import { useTheme } from 'react-native-paper';
 
@@ -13,7 +13,7 @@ interface SongListProps {
 }
 
 const SongList: React.FC<SongListProps> = ({ tracks, scannedTracks, onSongPlay }) => {
-  const { playTrack, setQueue } = useQueue();
+  const { playTrack, setQueue } = usePerQueuePlayer();
   const { selectedQueue } = useMultiQueue();
   const theme = useTheme();
   return (

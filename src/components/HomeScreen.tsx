@@ -6,23 +6,17 @@ import TopBar from './TopBar';
 import SongList from './SongList';
 import NowPlayingBar from './NowPlayingBar';
 import NowPlaying from './NowPlaying';
-import { usePlayer } from '../context/PlayerContext';
-import { useQueue } from '../context/QueueContext';
-import { useMultiQueue } from '../context/MultiQueueContext';
+// import { usePlayer } from '../context/PlayerContext';
 import { scanMusic } from '../utils/musicScanner';
 
 const HomeScreen: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [nowPlayingVisible, setNowPlayingVisible] = useState(false);
-  const { setQueue: setPlayerQueue, playTrack: playPlayerTrack } = usePlayer();
-  const { players } = useQueue();
-  const { selectedQueue } = useMultiQueue();
+  // const { setQueue: setPlayerQueue, playTrack: playPlayerTrack } = usePlayer();
+  // Removed unused: const { players } = useQueue();
+  // Removed unused selectedQueue
   // Three independent queues
-  const [queues, setQueues] = useState<{ [key: string]: any[] }>({
-    queue1: [],
-    queue2: [],
-    queue3: [],
-  });
+  // Removed unused queues state
   // For demo, loading state and scannedTracks can be managed here or via context
   // Replace with real scan logic as needed
   const [scanning, setScanning] = useState(false);
@@ -37,16 +31,6 @@ const HomeScreen: React.FC = () => {
         const tracks = await scanMusic();
         if (!mounted) return;
         setScannedTracks(tracks);
-        // Initialize all queues with scanned tracks if they are empty
-        setQueues(prev => {
-          const newQueues = { ...prev };
-          for (const key of Object.keys(newQueues)) {
-            if (!newQueues[key] || newQueues[key].length === 0) {
-              newQueues[key] = tracks;
-            }
-          }
-          return newQueues;
-        });
       } catch (e) {
         console.warn('Initial scan failed', e);
       } finally {
@@ -56,22 +40,12 @@ const HomeScreen: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
-  // When selectedQueue changes, sync PlayerContext to match the selected queue's state for audio playback
-  useEffect(() => {
-    const player = players[selectedQueue];
-    if (player && player.queue.length > 0 && player.currentTrack) {
-      setPlayerQueue(player.queue);
-      playPlayerTrack(player.currentTrack);
-    }
-  }, [selectedQueue, players, setPlayerQueue, playPlayerTrack]);
+  // Removed obsolete effect that referenced setPlayerQueue and playPlayerTrack
 
   // Handler to update the current queue (for SongList)
-  const handleSetQueue = (tracks: any[]) => {
-    setQueues(prev => ({ ...prev, [selectedQueue]: tracks }));
-    // Do not update PlayerContext queue
-  };
+  // Removed unused handleSetQueue
 
-  const currentQueue = queues[selectedQueue] || [];
+  // Removed unused: const currentQueue = queues[selectedQueue] || [];
   return (
     <View style={styles.container}>
       <TopBar onMenuPress={() => setDrawerVisible(true)} />
@@ -101,7 +75,6 @@ const HomeScreen: React.FC = () => {
         ) : (
           <SongList
             tracks={scannedTracks}
-            setQueue={handleSetQueue}
             scannedTracks={scannedTracks}
             onSongPlay={() => setNowPlayingVisible(true)}
           />
