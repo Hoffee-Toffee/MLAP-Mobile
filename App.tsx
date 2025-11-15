@@ -13,6 +13,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { MultiQueueProvider } from './src/context/MultiQueueContext';
 import { PerQueuePlayerProvider } from './src/context/PerQueuePlayerContext';
 import { QueueProvider } from './src/context/QueueContext';
+import { AllTracksProvider } from './src/context/AllTracksContext';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -21,12 +22,14 @@ function App() {
     <PerQueuePlayerProvider>
       <QueueProvider>
         <MultiQueueProvider>
-          <SafeAreaProvider>
-            <PaperProvider>
-              <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-              <AppNavigator />
-            </PaperProvider>
-          </SafeAreaProvider>
+          <AllTracksProvider>
+            <SafeAreaProvider>
+              <PaperProvider>
+                <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+                <AppNavigator />
+              </PaperProvider>
+            </SafeAreaProvider>
+          </AllTracksProvider>
         </MultiQueueProvider>
       </QueueProvider>
     </PerQueuePlayerProvider>

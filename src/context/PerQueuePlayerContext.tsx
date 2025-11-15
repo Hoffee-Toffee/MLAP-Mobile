@@ -1,4 +1,67 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { savePlayerState, loadPlayerState, PersistedState } from '../utils/playerPersistence';
+
+// --- Persistence: restore on mount, save every 15s if playing ---
+// Restore state on mount if all players are inactive
+useEffect(() => {
+  let mounted = true;
+  (async () => {
+    const allInactive = Object.values(soundRefs.current).every(s => !s);
+    if (!allInactive) return;
+    const persisted = await loadPlayerState();
+    if (!persisted || !mounted) return;
+    setPlayers(prev => {
+      const next = { ...prev };
+      (Object.keys(prev) as QueueId[]).forEach(queueId => {
+        const p = persisted[queueId];
+        if (p) {
+          next[queueId] = {
+            ...prev[queueId],
+            queue: p.queue,
+            currentTrack: p.queue.find(t => t.id === p.currentTrackId) || null,
+            position: p.position,
+            volume: p.volume,
+            isPlaying: false,
+            sound: null,
+            duration: prev[queueId].duration,
+          };
+        }
+      });
+      return next;
+    });
+  })();
+  return () => { mounted = false; };
+}, []);
+
+// Save state every 15s if any player is playing
+const playersRef = useRef(players);
+useEffect(() => { playersRef.current = players; }, [players]);
+useEffect(() => {
+  const interval = setInterval(() => {
+    const players = playersRef.current;
+    const anyPlaying = Object.values(players).some((p: any) => p.isPlaying);
+    if (!anyPlaying) return;
+    const state: PersistedState = {};
+    (Object.keys(players) as QueueId[]).forEach(queueId => {
+      const p = players[queueId];
+      state[queueId] = {
+        queue: p.queue.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          artist: t.artist,
+          album: t.album,
+          path: t.path,
+          picture: t.picture,
+        })),
+        currentTrackId: p.currentTrack?.id || null,
+        position: p.position,
+        volume: p.volume,
+      };
+    });
+    savePlayerState(state);
+  }, 15000);
+  return () => clearInterval(interval);
+}, []);
 import Sound from 'react-native-sound';
 import type { ScannedTrack } from '../utils/musicScanner';
 
@@ -66,45 +129,69 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
     }));
   }, []);
 
-
-  const playTrack = useCallback((queueId: QueueId, track: ScannedTrack) => {
-    // Stop and release previous sound if exists
-    if (soundRefs.current[queueId]) {
-      soundRefs.current[queueId]?.stop();
-      soundRefs.current[queueId]?.release();
-    }
-    // Create new Sound instance
-    const currentVolume = players[queueId]?.volume ?? 1.0;
-    const sound = new Sound(track.path, Sound.MAIN_BUNDLE, (error) => {
-      if (error) {
-        setPlayers(prev => ({
-          ...prev,
-          [queueId]: { ...prev[queueId], isPlaying: false, sound: null, duration: 0, position: 0 }
-        }));
-        return;
-      }
-      sound.setVolume(currentVolume);
-      setPlayers(prev => ({
-        ...prev,
-        [queueId]: { ...prev[queueId], duration: sound.getDuration() * 1000 }
-      }));
-      sound.play((success) => {
-        if (success) {
-          playNext(queueId);
-        } else {
-          setPlayers(prev => ({
-            ...prev,
-            [queueId]: { ...prev[queueId], isPlaying: false, position: 0 }
-          }));
-        }
+  // --- Persistence: restore on mount, save every 15s if playing ---
+  // Restore state on mount if all players are inactive
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const allInactive = Object.values(soundRefs.current).every(s => !s);
+      if (!allInactive) return;
+      const persisted = await loadPlayerState();
+      if (!persisted || !mounted) return;
+      setPlayers(prev => {
+        const next = { ...prev };
+        (Object.keys(prev) as QueueId[]).forEach(queueId => {
+          const p = persisted[queueId];
+          if (p) {
+            next[queueId] = {
+              ...prev[queueId],
+              queue: p.queue,
+              currentTrack: p.queue.find(t => t.id === p.currentTrackId) || null,
+              position: p.position,
+              volume: p.volume,
+              isPlaying: false,
+              sound: null,
+              duration: prev[queueId].duration,
+            };
+          }
+        });
+        return next;
       });
-    });
-    soundRefs.current[queueId] = sound;
-    setPlayers(prev => ({
-      ...prev,
-      [queueId]: { ...prev[queueId], currentTrack: track, isPlaying: true, sound, position: 0 }
-    }));
-  }, [players, playNext]);
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Save state every 15s if any player is playing
+  const playersRef = useRef(players);
+  useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const players = playersRef.current;
+      const anyPlaying = Object.values(players).some((p: any) => p.isPlaying);
+      if (!anyPlaying) return;
+      const state: PersistedState = {};
+      (Object.keys(players) as QueueId[]).forEach(queueId => {
+        const p = players[queueId];
+        state[queueId] = {
+          queue: p.queue.map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            path: t.path,
+            picture: t.picture,
+          })),
+          currentTrackId: p.currentTrack?.id || null,
+          position: p.position,
+          volume: p.volume,
+        };
+      });
+      savePlayerState(state);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- End persistence ---
   // Global polling for all active players to update position in context
   useEffect(() => {
     const interval = setInterval(() => {

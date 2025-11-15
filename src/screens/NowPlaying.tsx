@@ -1,13 +1,17 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { PanResponder, GestureResponderEvent, PanResponderGestureState, View, Pressable } from 'react-native';
+import { PanResponder, View, Pressable } from 'react-native';
 import { Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
-import { Avatar, List, Button, useTheme } from 'react-native-paper';
+import { Avatar, Button, useTheme } from 'react-native-paper';
 import { useMultiQueue } from '../context/MultiQueueContext';
 import { usePerQueuePlayer } from '../context/PerQueuePlayerContext';
 
 // --- VolumeSlider component ---
-const VolumeSlider = ({ value, onChange }) => {
+interface VolumeSliderProps {
+  value: number;
+  onChange: (v: number) => void;
+}
+const VolumeSlider: React.FC<VolumeSliderProps> = ({ value, onChange }) => {
   const [dragging, setDragging] = useState(false);
   const [sliderValue, setSliderValue] = useState(value);
   const trackWidth = 180;
@@ -18,7 +22,7 @@ const VolumeSlider = ({ value, onChange }) => {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt, gestureState) => {
+      onPanResponderGrant: (evt) => {
         setDragging(true);
         let x = evt.nativeEvent.locationX;
         x = Math.max(0, Math.min(trackWidth, x));
@@ -26,14 +30,14 @@ const VolumeSlider = ({ value, onChange }) => {
         setSliderValue(percent);
         onChange(percent);
       },
-      onPanResponderMove: (evt, gestureState) => {
+      onPanResponderMove: (evt) => {
         let x = evt.nativeEvent.locationX;
         x = Math.max(0, Math.min(trackWidth, x));
         const percent = x / trackWidth;
         setSliderValue(percent);
         onChange(percent);
       },
-      onPanResponderRelease: (evt, gestureState) => {
+      onPanResponderRelease: (evt) => {
         setDragging(false);
         let x = evt.nativeEvent.locationX;
         x = Math.max(0, Math.min(trackWidth, x));
@@ -59,9 +63,7 @@ const VolumeSlider = ({ value, onChange }) => {
   );
 };
 
-interface NowPlayingProps {
-  onClose?: () => void;
-}
+
 
 function formatDuration(ms?: number) {
   if (!ms && ms !== 0) return '';
@@ -75,7 +77,7 @@ function formatDuration(ms?: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-const NowPlaying = ({ onClose }) => {
+const NowPlaying: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const theme = useTheme();
   const { selectedQueue } = useMultiQueue();
   const { players, play, pause, seekTo, playNext, playPrevious, playTrack, setVolume, getVolume } = usePerQueuePlayer();
@@ -89,8 +91,8 @@ const NowPlaying = ({ onClose }) => {
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekPosition, setSeekPosition] = useState<number | null>(null); // ms
 
-  // Volume state for slider UI (controlled by context)
-  const [volume, setVolumeState] = useState(() => getVolume(selectedQueue));
+  // Always derive volume from context for the selected queue
+  const volume = getVolume(selectedQueue);
   // Progress state for real-time updates
   const [progress, setProgress] = useState(() => {
     return duration ? Math.max(0, Math.min(1, position / duration)) : 0;
@@ -112,16 +114,11 @@ const NowPlaying = ({ onClose }) => {
     };
   }, [players, selectedQueue, isSeeking]);
 
-  // Always sync local volume state with context value for selectedQueue
-  useEffect(() => {
-    setVolumeState(getVolume(selectedQueue));
-  }, [selectedQueue, getVolume]);
 
-  // When slider changes, update context and local state
+  // When slider changes, always update the current selectedQueue's volume
   const handleVolumeChange = useCallback((v: number) => {
-    setVolumeState(v);
     setVolume(selectedQueue, v);
-  }, [selectedQueue, setVolume]);
+  }, [setVolume, selectedQueue]);
 
   // Real-time progress bar update (animation frame) - only if not seeking
   useEffect(() => {
@@ -150,20 +147,20 @@ const NowPlaying = ({ onClose }) => {
   const seekBarPanResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (evt, gestureState) => {
+    onPanResponderGrant: (evt) => {
       setIsSeeking(true);
       if (!duration || !barWidth) return;
       const percent = Math.max(0, Math.min(1, evt.nativeEvent.locationX / barWidth));
       setSeekPosition(Math.round(duration * percent));
     },
-    onPanResponderMove: (evt, gestureState) => {
+    onPanResponderMove: (evt) => {
       if (!duration || !barWidth) return;
       let x = evt.nativeEvent.locationX;
       x = Math.max(0, Math.min(barWidth, x));
       const percent = x / barWidth;
       setSeekPosition(Math.round(duration * percent));
     },
-    onPanResponderRelease: (evt, gestureState) => {
+    onPanResponderRelease: (evt) => {
       if (!duration || !barWidth) {
         setIsSeeking(false);
         setSeekPosition(null);

@@ -44,6 +44,7 @@ const SongItem: React.FC<SongItemProps> = ({ track, onPress, textColor, backgrou
 
 const styles = StyleSheet.create({
   item: {
+    paddingLeft: 16, // Match List.Item default left padding
     // backgroundColor will be overridden by prop if provided
   },
   title: {
