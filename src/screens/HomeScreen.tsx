@@ -5,7 +5,7 @@ import { Portal, Modal, Drawer } from 'react-native-paper';
 
 import TopBar from '../components/TopBar';
 import NowPlayingBar from '../components/NowPlayingBar';
-import NowPlaying from './NowPlaying';
+import { useNavigation } from '@react-navigation/native';
 import SongsTab from '../tabs/SongsTab';
 import AlbumsTab from '../tabs/AlbumsTab';
 import ArtistsTab from '../tabs/ArtistsTab';
@@ -43,7 +43,7 @@ const TabButton: React.FC<TabButtonProps> = ({ label, active, onPress }) => {
 
 const HomeScreen: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [nowPlayingVisible, setNowPlayingVisible] = useState(false);
+  const navigation = useNavigation();
   const [tab, setTab] = useState('Songs');
   const { tracks, loading } = useAllTracks();
 
@@ -66,6 +66,7 @@ const HomeScreen: React.FC = () => {
       </Portal>
 
       {/* Tabs navigation */}
+      {/* Only show tab bar if on HomeScreen (not NowPlaying, not Queue) */}
       <View style={{ width: '100%' }}>
         <ScrollView
           horizontal
@@ -83,15 +84,13 @@ const HomeScreen: React.FC = () => {
       </View>
 
       <View style={styles.flex1}>
-        {nowPlayingVisible ? (
-          <NowPlaying onClose={() => setNowPlayingVisible(false)} />
-        ) : loading ? (
+        {loading ? (
           <View style={styles.centered}>
             <ActivityIndicator animating={true} size={36} />
           </View>
         ) : (
           tab === 'Songs' ? (
-            <SongsTab tracks={[...tracks].sort((a, b) => (a.title || '').localeCompare(b.title || ''))} onSongPlay={() => setNowPlayingVisible(true)} />
+            <SongsTab tracks={[...tracks].sort((a, b) => (a.title || '').localeCompare(b.title || ''))} onSongPlay={() => navigation.navigate('NowPlaying' as never)} />
           ) : tab === 'Albums' ? (
             <AlbumsTab tracks={tracks} />
           ) : tab === 'Artists' ? (
@@ -105,9 +104,7 @@ const HomeScreen: React.FC = () => {
       </View>
 
 
-      {!nowPlayingVisible && (
-        <NowPlayingBar onPress={() => setNowPlayingVisible(true)} />
-      )}
+      <NowPlayingBar onPress={() => navigation.navigate('NowPlaying' as never)} />
     </View>
   );
 };

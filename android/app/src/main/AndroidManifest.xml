@@ -32,6 +32,10 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
-      <service android:name="com.guichaguri.trackplayer.service.MusicService" android:foregroundServiceType="mediaPlayback" />
+      <receiver android:name="com.mlap.MediaButtonReceiver" android:exported="true">
+        <intent-filter>
+          <action android:name="android.intent.action.MEDIA_BUTTON" />
+        </intent-filter>
+      </receiver>
     </application>
 </manifest>

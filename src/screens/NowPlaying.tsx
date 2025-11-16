@@ -1,8 +1,8 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { PanResponder, View, Pressable } from 'react-native';
-import { Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
-import { Avatar, Button, useTheme } from 'react-native-paper';
+import { Text, StyleSheet, TouchableOpacity, View as RNView } from 'react-native';
+import { Avatar, useTheme } from 'react-native-paper';
 import { useMultiQueue } from '../context/MultiQueueContext';
 import { usePerQueuePlayer } from '../context/PerQueuePlayerContext';
 
@@ -15,6 +15,12 @@ const VolumeSlider: React.FC<VolumeSliderProps> = ({ value, onChange }) => {
   const [dragging, setDragging] = useState(false);
   const [sliderValue, setSliderValue] = useState(value);
   const trackWidth = 180;
+  const theme = useTheme();
+  // Always use the latest onChange (which closes over the latest selectedQueue)
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
   useEffect(() => {
     if (!dragging) setSliderValue(value);
   }, [value, dragging]);
@@ -28,14 +34,14 @@ const VolumeSlider: React.FC<VolumeSliderProps> = ({ value, onChange }) => {
         x = Math.max(0, Math.min(trackWidth, x));
         const percent = x / trackWidth;
         setSliderValue(percent);
-        onChange(percent);
+        onChangeRef.current(percent);
       },
       onPanResponderMove: (evt) => {
         let x = evt.nativeEvent.locationX;
         x = Math.max(0, Math.min(trackWidth, x));
         const percent = x / trackWidth;
         setSliderValue(percent);
-        onChange(percent);
+        onChangeRef.current(percent);
       },
       onPanResponderRelease: (evt) => {
         setDragging(false);
@@ -43,7 +49,7 @@ const VolumeSlider: React.FC<VolumeSliderProps> = ({ value, onChange }) => {
         x = Math.max(0, Math.min(trackWidth, x));
         const percent = x / trackWidth;
         setSliderValue(percent);
-        onChange(percent);
+        onChangeRef.current(percent);
       },
       onPanResponderTerminate: () => {
         setDragging(false);
@@ -52,12 +58,12 @@ const VolumeSlider: React.FC<VolumeSliderProps> = ({ value, onChange }) => {
   ).current;
   return (
     <View
-      style={{ height: 32, width: 180, position: 'relative', top: 0, alignItems: 'center', justifyContent: 'center' }}
+      style={styles.volumeSliderOuter}
       hitSlop={{ top: 16, bottom: 16, left: 0, right: 0 }}
       {...panResponder.panHandlers}
     >
-      <View style={styles.volumeSliderTrack}>
-        <View style={[styles.volumeSliderFill, { width: `${(sliderValue ?? 0) * 100}%` }]} />
+      <View style={[styles.volumeSliderTrack, { backgroundColor: theme.colors.onBackground + '33' }]}>
+        <View style={[styles.volumeSliderFill, { width: `${(sliderValue ?? 0) * 100}%`, backgroundColor: theme.colors.onPrimary }]} />
       </View>
     </View>
   );
@@ -77,12 +83,16 @@ function formatDuration(ms?: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-const NowPlaying: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
-  const theme = useTheme();
+import { Appbar } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
+import TopBar from '../components/TopBar';
+
+const NowPlaying: React.FC = () => {
+  const navigation = useNavigation();
   const { selectedQueue } = useMultiQueue();
-  const { players, play, pause, seekTo, playNext, playPrevious, playTrack, setVolume, getVolume } = usePerQueuePlayer();
+  const { players, play, pause, seekTo, playNext, playPrevious, setVolume, getVolume } = usePerQueuePlayer();
   const player = players[selectedQueue];
-  const { currentTrack, queue, position, duration, isPlaying } = player;
+  const { currentTrack, position, duration, isPlaying } = player;
 
   // For measuring progress bar width
   const [barWidth, setBarWidth] = useState(0);
@@ -183,28 +193,45 @@ const NowPlaying: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   // Use real-time progress state, or show seekPosition if dragging
   const progressPercent = isSeeking && seekPosition !== null && duration ? Math.max(0, Math.min(1, seekPosition / duration)) : progress;
 
+  const theme = useTheme();
   return (
-    <View style={styles.container}>
-      {/* Artwork */}
-      <View style={styles.artworkContainer}>
-        <Avatar.Icon size={128} icon="music" />
-      </View>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {/* Top bar with back and queue switcher, no menu, playlist-music icon for queue */}
+      <Appbar.Header style={[styles.appbarHeader, { backgroundColor: theme.colors.primary }]}>
+        <Appbar.BackAction color={theme.colors.onPrimary} onPress={() => navigation.goBack()} />
+        <RNView style={styles.queueSwitcherWrap}>
+          <TopBar showMenu={false} iconColor={theme.colors.onPrimary} />
+        </RNView>
+      </Appbar.Header>
 
-      {/* Title and artist */}
-      <View style={styles.titleContainer}>
-        <Text style={styles.titleText}>{currentTrack?.title ?? 'No Track'}</Text>
-        <Text style={styles.artistText}>{currentTrack?.artist ?? ''}</Text>
-      </View>
+      {/* Song artwork and info */}
+      {currentTrack && (
+        <>
+          <View style={styles.artworkContainer}>
+            {currentTrack.picture ? (
+              <Avatar.Image size={180} source={{ uri: currentTrack.picture.startsWith('/') ? 'file://' + currentTrack.picture : currentTrack.picture }} />
+            ) : (
+              <Avatar.Icon size={180} icon="music" />
+            )}
+          </View>
+          <View style={styles.titleContainer}>
+            <Text style={[styles.titleText, { color: theme.colors.onBackground }]} numberOfLines={1}>{currentTrack.title ?? 'Unknown'}</Text>
+            <Text style={[styles.artistText, { color: theme.colors.onBackground }]} numberOfLines={1}>{currentTrack.artist ?? 'Unknown artist'}</Text>
+          </View>
+        </>
+      )}
 
       {/* Progress bar with drag-to-seek and tap-to-seek (larger touch area) */}
       <View style={styles.progressBarContainer}>
         <View
-          style={styles.progressBarTrack}
+          style={[styles.progressBarTrack, { backgroundColor: 'transparent', height: 32, paddingHorizontal: 0, marginHorizontal: 0 }]}
           onLayout={e => setBarWidth(e.nativeEvent.layout.width)}
           {...seekBarPanResponder.panHandlers}
         >
-          <View style={styles.progressBarBg} />
-          <View style={[styles.progressBarFill, { width: `${progressPercent * 100}%` }]} />
+          {/* Unfilled track */}
+          <View style={[styles.progressBarBg, { backgroundColor: theme.colors.onBackground + '33' }]} />
+          {/* Filled portion */}
+          <View style={[styles.progressBarFill, { width: `${progressPercent * 100}%`, backgroundColor: theme.colors.onPrimary }]} />
           <Pressable
             style={styles.progressBarTouch}
             hitSlop={{ top: 16, bottom: 16, left: 0, right: 0 }}
@@ -212,14 +239,14 @@ const NowPlaying: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
           />
         </View>
         <View style={styles.progressBarTimeRow}>
-          <Text>{formatDuration(isSeeking && seekPosition !== null ? seekPosition : position)}</Text>
-          <Text>{formatDuration(duration)}</Text>
+          <Text style={{ color: theme.colors.onBackground }}>{formatDuration(isSeeking && seekPosition !== null ? seekPosition : position)}</Text>
+          <Text style={{ color: theme.colors.onBackground }}>{formatDuration(duration)}</Text>
         </View>
       </View>
 
       {/* Volume slider with drag-to-set and expanded interaction area */}
       <View style={styles.volumeRow}>
-        <Text style={styles.volumePercent}>{Math.round(volume * 100)}%</Text>
+        <Text style={[styles.volumePercent, { color: theme.colors.onBackground }]}>{Math.round(volume * 100)}%</Text>
         <View style={styles.volumeSliderTrackRow}>
           <VolumeSlider
             value={volume}
@@ -245,51 +272,36 @@ const NowPlaying: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
           <Avatar.Icon size={48} icon="skip-next" />
         </TouchableOpacity>
       </View>
-
-      {/* Queue list */}
-      {queue && queue.length > 0 && (
-        <View style={styles.queueListContainer}>
-          <Text style={[styles.queueListTitle, { color: theme.colors.onBackground }]}>Queue</Text>
-          <FlatList
-            data={queue}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => playTrack(selectedQueue, item)}
-                style={[styles.queueListItem, {
-                  backgroundColor: item.id === currentTrack?.id ? theme.colors.primary : theme.colors.background
-                }]}
-              >
-                <Text
-                  style={[
-                    {
-                      color: item.id === currentTrack?.id ? theme.colors.onPrimary : theme.colors.onBackground,
-                    },
-                    item.id === currentTrack?.id ? styles.queueListItemBold : null,
-                  ]}
-                >
-                  {item.title ?? 'Unknown'}
-                  {item.artist ? ` \u2014 ${item.artist}` : ''}
-                </Text>
-              </TouchableOpacity>
-            )}
-            style={styles.queueList}
-          />
-        </View>
-      )}
-
-      <Button mode="outlined" onPress={onClose} style={styles.closeButton}>
-        Back
-      </Button>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  volumeSliderOuter: {
+    height: 32,
+    width: 180,
+    position: 'relative',
+    top: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appbarHeader: {
+    margin: 0,
+    padding: 0,
+    elevation: 0,
+    borderBottomWidth: 0,
+  },
+  queueSwitcherWrap: {
+    flex: 1,
+    marginLeft: 0,
+    marginRight: 0,
+    padding: 0,
+    justifyContent: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: 'white',
-    padding: 16,
+    padding: 0,
   },
   artworkContainer: {
     alignItems: 'center',
@@ -308,8 +320,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   progressBarContainer: {
-    marginTop: 24,
-    paddingHorizontal: 8,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'transparent',
   },
   progressBarTrack: {
     height: 32,
@@ -325,7 +338,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: 8,
-    backgroundColor: '#6200ee',
+    backgroundColor: '#6200ee', // fallback, overridden inline
     borderRadius: 4,
     position: 'absolute',
     left: 0,

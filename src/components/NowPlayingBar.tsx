@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { TouchableOpacity, View, Text, StyleSheet, Pressable } from 'react-native';
-import { List, Avatar } from 'react-native-paper';
+import { List, Avatar, useTheme } from 'react-native-paper';
 
 import { useMultiQueue } from '../context/MultiQueueContext';
 import { usePerQueuePlayer } from '../context/PerQueuePlayerContext';
@@ -14,6 +14,7 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({ onPress }) => {
   const { players, play, pause } = usePerQueuePlayer();
   const playerState = players[selectedQueue];
   const { currentTrack, isPlaying, position, duration } = playerState;
+  const theme = useTheme();
   // Real-time progress bar update (poll context every 250ms)
   const [progress, setProgress] = useState(() => duration ? Math.min(1, position / duration) : 0);
   useEffect(() => {
@@ -30,39 +31,51 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({ onPress }) => {
     };
   }, [players, selectedQueue]);
   if (!currentTrack) return null;
+  const navigation = require('@react-navigation/native').useNavigation();
   return (
-    <TouchableOpacity style={styles.bar} activeOpacity={0.9} onPress={onPress}>
+    <TouchableOpacity style={[styles.bar, { backgroundColor: theme.colors.primary }]} activeOpacity={0.9} onPress={onPress}>
       <View style={styles.row}>
         {currentTrack.picture ? (
           <Avatar.Image size={40} source={{ uri: currentTrack.picture && currentTrack.picture.startsWith('/') ? 'file://' + currentTrack.picture : currentTrack.picture }} />
         ) : (
-          <List.Icon icon="music" />
+          <List.Icon icon="music" color={theme.colors.onPrimary} />
         )}
         <View style={styles.infoContainer}>
-          <Text numberOfLines={1} style={styles.title}>{currentTrack.title ?? 'Unknown'}</Text>
-          <Text numberOfLines={1} style={styles.artist}>{currentTrack.artist ?? 'Unknown artist'}</Text>
+          <Text numberOfLines={1} style={[styles.title, { color: theme.colors.onPrimary }]}>{currentTrack.title ?? 'Unknown'}</Text>
+          <Text numberOfLines={1} style={[styles.artist, { color: theme.colors.onPrimary }]}>{currentTrack.artist ?? 'Unknown artist'}</Text>
           {/* mini progress bar with larger touch area */}
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+          <View style={[styles.progressBarBg, { backgroundColor: theme.colors.onBackground + '33' }]}>
+            <View style={[styles.progressBar, { width: `${progress * 100}%`, backgroundColor: theme.colors.onPrimary }]} />
             <Pressable style={StyleSheet.absoluteFill} hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }} />
           </View>
         </View>
+        {/* Queue button on the right */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Queue' as never)}
+          style={styles.queueButton}
+          accessibilityLabel="View Queue"
+        >
+          <List.Icon icon="playlist-music" color={theme.colors.onPrimary} />
+        </TouchableOpacity>
       </View>
       <TouchableOpacity onPress={() => (isPlaying ? pause(selectedQueue) : play(selectedQueue))} style={styles.playPauseBtn}>
-        <List.Icon icon={isPlaying ? 'pause' : 'play'} />
+        <List.Icon icon={isPlaying ? 'pause' : 'play'} color={theme.colors.onPrimary} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
+  queueButton: {
+    marginLeft: 12,
+    padding: 8,
+  },
   bar: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     height: 64,
-    backgroundColor: '#fff',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#ddd',
     paddingHorizontal: 12,

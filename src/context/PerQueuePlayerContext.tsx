@@ -1,67 +1,14 @@
+// TypeScript: declare on globalThis for type safety (top-level)
+declare global {
+
+  var pauseAllQueues: undefined | (() => void);
+
+  var resumeAllQueues: undefined | (() => void);
+}
+
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { savePlayerState, loadPlayerState, PersistedState } from '../utils/playerPersistence';
 
-// --- Persistence: restore on mount, save every 15s if playing ---
-// Restore state on mount if all players are inactive
-useEffect(() => {
-  let mounted = true;
-  (async () => {
-    const allInactive = Object.values(soundRefs.current).every(s => !s);
-    if (!allInactive) return;
-    const persisted = await loadPlayerState();
-    if (!persisted || !mounted) return;
-    setPlayers(prev => {
-      const next = { ...prev };
-      (Object.keys(prev) as QueueId[]).forEach(queueId => {
-        const p = persisted[queueId];
-        if (p) {
-          next[queueId] = {
-            ...prev[queueId],
-            queue: p.queue,
-            currentTrack: p.queue.find(t => t.id === p.currentTrackId) || null,
-            position: p.position,
-            volume: p.volume,
-            isPlaying: false,
-            sound: null,
-            duration: prev[queueId].duration,
-          };
-        }
-      });
-      return next;
-    });
-  })();
-  return () => { mounted = false; };
-}, []);
-
-// Save state every 15s if any player is playing
-const playersRef = useRef(players);
-useEffect(() => { playersRef.current = players; }, [players]);
-useEffect(() => {
-  const interval = setInterval(() => {
-    const players = playersRef.current;
-    const anyPlaying = Object.values(players).some((p: any) => p.isPlaying);
-    if (!anyPlaying) return;
-    const state: PersistedState = {};
-    (Object.keys(players) as QueueId[]).forEach(queueId => {
-      const p = players[queueId];
-      state[queueId] = {
-        queue: p.queue.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          artist: t.artist,
-          album: t.album,
-          path: t.path,
-          picture: t.picture,
-        })),
-        currentTrackId: p.currentTrack?.id || null,
-        position: p.position,
-        volume: p.volume,
-      };
-    });
-    savePlayerState(state);
-  }, 15000);
-  return () => clearInterval(interval);
-}, []);
 import Sound from 'react-native-sound';
 import type { ScannedTrack } from '../utils/musicScanner';
 
@@ -138,58 +85,97 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       if (!allInactive) return;
       const persisted = await loadPlayerState();
       if (!persisted || !mounted) return;
-      setPlayers(prev => {
-        const next = { ...prev };
-        (Object.keys(prev) as QueueId[]).forEach(queueId => {
-          const p = persisted[queueId];
-          if (p) {
-            next[queueId] = {
+      (Object.keys(persisted) as QueueId[]).forEach(queueId => {
+        const p = persisted[queueId];
+        if (p && p.currentTrackId) {
+          const track = p.queue.find(t => t.id === p.currentTrackId) || null;
+          if (track) {
+            // Create Sound object for the track, set position and duration
+            const sound = new Sound(track.path, Sound.MAIN_BUNDLE, (error) => {
+              if (!error) {
+                sound.setVolume(p.volume ?? 1.0);
+                sound.setCurrentTime((p.position ?? 0) / 1000);
+                setPlayers(prev => ({
+                  ...prev,
+                  [queueId]: {
+                    ...prev[queueId],
+                    duration: sound.getDuration() * 1000,
+                  }
+                }));
+              }
+            });
+            soundRefs.current[queueId] = sound;
+            setPlayers(prev => ({
+              ...prev,
+              [queueId]: {
+                ...prev[queueId],
+                queue: p.queue,
+                currentTrack: track,
+                position: p.position,
+                volume: p.volume,
+                isPlaying: false,
+                sound,
+                // duration will be set in callback above
+              }
+            }));
+          } else {
+            // No valid track, just restore queue
+            setPlayers(prev => ({
+              ...prev,
+              [queueId]: {
+                ...prev[queueId],
+                queue: p.queue,
+                currentTrack: null,
+                position: 0,
+                volume: p.volume,
+                isPlaying: false,
+                sound: null,
+                duration: 0,
+              }
+            }));
+          }
+        } else if (p) {
+          // No current track, just restore queue
+          setPlayers(prev => ({
+            ...prev,
+            [queueId]: {
               ...prev[queueId],
               queue: p.queue,
-              currentTrack: p.queue.find(t => t.id === p.currentTrackId) || null,
-              position: p.position,
+              currentTrack: null,
+              position: 0,
               volume: p.volume,
               isPlaying: false,
               sound: null,
-              duration: prev[queueId].duration,
-            };
-          }
-        });
-        return next;
+              duration: 0,
+            }
+          }));
+        }
       });
     })();
     return () => { mounted = false; };
   }, []);
 
-  // Save state every 15s if any player is playing
-  const playersRef = useRef(players);
-  useEffect(() => { playersRef.current = players; }, [players]);
+  // Save state on every change (queue, track, position, volume) for all queues, even if paused
   useEffect(() => {
-    const interval = setInterval(() => {
-      const players = playersRef.current;
-      const anyPlaying = Object.values(players).some((p: any) => p.isPlaying);
-      if (!anyPlaying) return;
-      const state: PersistedState = {};
-      (Object.keys(players) as QueueId[]).forEach(queueId => {
-        const p = players[queueId];
-        state[queueId] = {
-          queue: p.queue.map((t: any) => ({
-            id: t.id,
-            title: t.title,
-            artist: t.artist,
-            album: t.album,
-            path: t.path,
-            picture: t.picture,
-          })),
-          currentTrackId: p.currentTrack?.id || null,
-          position: p.position,
-          volume: p.volume,
-        };
-      });
-      savePlayerState(state);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
+    const state: PersistedState = {};
+    (Object.keys(players) as QueueId[]).forEach(queueId => {
+      const p = players[queueId];
+      state[queueId] = {
+        queue: p.queue.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          artist: t.artist,
+          album: t.album,
+          path: t.path,
+          picture: t.picture,
+        })),
+        currentTrackId: p.currentTrack?.id || null,
+        position: p.position,
+        volume: p.volume,
+      };
+    });
+    savePlayerState(state);
+  }, [players]);
 
   // --- End persistence ---
   // Global polling for all active players to update position in context
@@ -221,9 +207,14 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       ...prev,
       [queueId]: { ...prev[queueId], volume }
     }));
+    // Always set volume on the Sound object if it exists, even if not playing
     const sound = soundRefs.current[queueId];
     if (sound) {
-      sound.setVolume(volume);
+      try {
+        sound.setVolume(volume);
+      } catch (e) {
+        // Defensive: ignore errors if sound is not ready
+      }
     }
   }, []);
 
@@ -234,7 +225,10 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
 
 
 
-  const playNext = useCallback((queueId: QueueId) => {
+  // --- playNext must be defined before playTrack to avoid circular dependency ---
+  // Use a ref to break the circular dependency between playNext and playTrack
+  const playTrackRef = useRef<(queueId: QueueId, track: ScannedTrack) => void | undefined>(undefined);
+  const playNext: (queueId: QueueId) => void = useCallback((queueId) => {
     setPlayers(prev => {
       const { queue, currentTrack } = prev[queueId];
       if (!queue.length || !currentTrack) return prev;
@@ -242,10 +236,60 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       const nextIdx = idx >= 0 && idx < queue.length - 1 ? idx + 1 : 0;
       if (nextIdx < 0 || nextIdx >= queue.length) return prev;
       const nextTrack = queue[nextIdx];
-      setTimeout(() => playTrack(queueId, nextTrack), 0);
+      setTimeout(() => playTrackRef.current?.(queueId, nextTrack), 0);
       return prev;
     });
+  }, []);
+
+  const playTrack: (queueId: QueueId, track: ScannedTrack) => void = useCallback((queueId, track) => {
+    // Stop and release previous sound if exists
+    if (soundRefs.current[queueId]) {
+      soundRefs.current[queueId]?.stop();
+      soundRefs.current[queueId]?.release();
+    }
+    // Create new Sound instance
+    const currentVolume = players[queueId]?.volume ?? 1.0;
+    const sound = new Sound(track.path, Sound.MAIN_BUNDLE, (error) => {
+      if (error) {
+        setPlayers(prev => ({
+          ...prev,
+          [queueId]: { ...prev[queueId], isPlaying: false, sound: null, duration: 0, position: 0 }
+        }));
+        return;
+      }
+      try {
+        sound.setVolume(currentVolume);
+      } catch {
+        // ignore
+      }
+      setPlayers(prev => ({
+        ...prev,
+        [queueId]: { ...prev[queueId], duration: sound.getDuration() * 1000 }
+      }));
+      sound.play((success) => {
+        if (success) {
+          playNext(queueId);
+        } else {
+          setPlayers(prev => ({
+            ...prev,
+            [queueId]: { ...prev[queueId], isPlaying: false, position: 0 }
+          }));
+        }
+      });
+    });
+    soundRefs.current[queueId] = sound;
+    setPlayers(prev => ({
+      ...prev,
+      [queueId]: { ...prev[queueId], currentTrack: track, isPlaying: true, sound, position: 0 }
+    }));
+  }, [players, playNext]);
+
+  // Keep playTrackRef updated
+  useEffect(() => {
+    playTrackRef.current = playTrack;
   }, [playTrack]);
+
+
 
   const playPrevious = useCallback((queueId: QueueId) => {
     setPlayers(prev => {
@@ -351,10 +395,22 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
 
   // Clean up sounds on unmount
   useEffect(() => {
+    const soundsAtUnmount = { ...soundRefs.current };
     return () => {
-      Object.values(soundRefs.current).forEach(sound => sound?.release());
+      Object.values(soundsAtUnmount).forEach(sound => sound?.release());
     };
   }, []);
+
+
+  // Attach pauseAllQueues and resumeAllQueues to globalThis for TrackPlayer service
+  if (typeof globalThis !== 'undefined') {
+    (globalThis as any).pauseAllQueues = () => {
+      (['queue1', 'queue2', 'queue3'] as QueueId[]).forEach(qid => pause(qid));
+    };
+    (globalThis as any).resumeAllQueues = () => {
+      (['queue1', 'queue2', 'queue3'] as QueueId[]).forEach(qid => play(qid));
+    };
+  }
 
   return (
     <PerQueuePlayerContext.Provider value={{ players, setQueue, playTrack, play, pause, seekTo, playNext, playPrevious, addToQueue, removeFromQueue, reorderQueue, setIsPlaying, setPosition, setDuration, setVolume, getVolume }}>
@@ -363,8 +419,11 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   );
 };
 
+
 export const usePerQueuePlayer = () => {
   const ctx = useContext(PerQueuePlayerContext);
   if (!ctx) throw new Error('usePerQueuePlayer must be used within PerQueuePlayerProvider');
   return ctx;
 };
+
+

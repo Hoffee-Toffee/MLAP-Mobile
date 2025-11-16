@@ -9,15 +9,16 @@ const QUEUE_LABELS = {
   queue3: 'Queue 3',
 };
 
-const TopBar: React.FC<{ onMenuPress: () => void }> = ({ onMenuPress }) => {
+type TopBarProps = { showMenu?: boolean; onMenuPress?: () => void; iconColor?: string };
+const TopBar: React.FC<TopBarProps> = ({ showMenu = true, onMenuPress, iconColor }) => {
   const { selectedQueue, setSelectedQueue } = useMultiQueue();
   const [modalVisible, setModalVisible] = React.useState(false);
   const theme = useTheme();
 
   return (
-    <Appbar.Header>
-      <Appbar.Action icon="menu" onPress={onMenuPress} />
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+    <Appbar.Header style={{ backgroundColor: theme.colors.primary }}>
+      {showMenu && <Appbar.Action icon="menu" color={iconColor ?? theme.colors.onPrimary} onPress={onMenuPress} />}
+      <View style={styles.row}>
         <TouchableOpacity
           style={styles.anchorTouchable}
           activeOpacity={0.7}
@@ -25,12 +26,12 @@ const TopBar: React.FC<{ onMenuPress: () => void }> = ({ onMenuPress }) => {
         >
           <View style={styles.anchorRow}>
             <Text style={[styles.anchorText, { color: theme.colors.onPrimary }]}>{QUEUE_LABELS[selectedQueue]}</Text>
-            <Appbar.Action icon={modalVisible ? 'chevron-up' : 'chevron-down'} color={theme.colors.onPrimary} onPress={() => setModalVisible(true)} />
+            <Appbar.Action icon={modalVisible ? 'chevron-up' : 'chevron-down'} color={iconColor ?? theme.colors.onPrimary} onPress={() => setModalVisible(true)} />
           </View>
         </TouchableOpacity>
         <Portal>
-          <Modal visible={modalVisible} onDismiss={() => setModalVisible(false)} contentContainerStyle={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Select Queue</Text>
+          <Modal visible={modalVisible} onDismiss={() => setModalVisible(false)} contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.colors.primary }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.onPrimary }]}>Select Queue</Text>
             {Object.entries(QUEUE_LABELS).map(([id, label]) => (
               <Button
                 key={id}
@@ -39,13 +40,16 @@ const TopBar: React.FC<{ onMenuPress: () => void }> = ({ onMenuPress }) => {
                   setSelectedQueue(id as any);
                   setModalVisible(false);
                 }}
-                style={styles.modalButton}
+                style={[styles.modalButton, { borderColor: theme.colors.onPrimary }]}
+                labelStyle={{ color: theme.colors.onPrimary }}
                 disabled={selectedQueue === id}
+                buttonColor={selectedQueue === id ? theme.colors.onPrimary : undefined}
+                textColor={theme.colors.primary}
               >
                 {label}
               </Button>
             ))}
-            <Button onPress={() => setModalVisible(false)} style={styles.modalButton}>
+            <Button onPress={() => setModalVisible(false)} style={styles.modalButton} labelStyle={{ color: theme.colors.onPrimary }}>
               Cancel
             </Button>
           </Modal>
@@ -56,8 +60,12 @@ const TopBar: React.FC<{ onMenuPress: () => void }> = ({ onMenuPress }) => {
 };
 
 const styles = StyleSheet.create({
-  anchorTouchable: {
+  row: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  anchorTouchable: {
     justifyContent: 'center',
     alignItems: 'flex-start',
     paddingHorizontal: 8,
