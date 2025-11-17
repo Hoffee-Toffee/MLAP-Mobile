@@ -10,6 +10,19 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 import { savePlayerState, loadPlayerState, PersistedState } from '../utils/playerPersistence';
 
 import Sound from 'react-native-sound';
+// For debug logging
+const DEBUG_PLAYBACK = true;
+const debugPlaybackLog = (...args: any[]) => {
+  if (DEBUG_PLAYBACK) {
+    // Use warn so it shows up in both JS and native logs
+    // @ts-ignore
+    if (typeof global !== 'undefined' && global.console && global.console.warn) {
+      global.console.warn('[MLAP-Playback]', ...args);
+    } else {
+      console.log('[MLAP-Playback]', ...args);
+    }
+  }
+};
 import type { ScannedTrack } from '../utils/musicScanner';
 
 export type QueueId = 'queue1' | 'queue2' | 'queue3';
@@ -53,7 +66,7 @@ const defaultPlayerState: PlayerState = {
   volume: 1.0,
 };
 
-const PerQueuePlayerContext = createContext<PerQueuePlayerContextProps | undefined>(undefined);
+export const PerQueuePlayerContext = createContext<PerQueuePlayerContextProps | undefined>(undefined);
 
 export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [players, setPlayers] = useState<Record<QueueId, PlayerState>>({
@@ -69,11 +82,31 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
     queue3: null,
   });
 
-  const setQueue = useCallback((queueId: QueueId, tracks: ScannedTrack[]) => {
-    setPlayers(prev => ({
-      ...prev,
-      [queueId]: { ...prev[queueId], queue: tracks },
-    }));
+  type SetQueueOptions = { clearAllState?: boolean };
+  const setQueue = useCallback((queueId: QueueId, tracks: ScannedTrack[], options?: SetQueueOptions) => {
+    setPlayers(prev => {
+      if (options?.clearAllState && tracks.length === 0) {
+        // Clear all state for this queue
+        return {
+          ...prev,
+          [queueId]: {
+            ...prev[queueId],
+            queue: [],
+            currentTrack: null,
+            sound: null,
+            isPlaying: false,
+            position: 0,
+            duration: 0,
+            // keep volume
+          },
+        };
+      } else {
+        return {
+          ...prev,
+          [queueId]: { ...prev[queueId], queue: tracks },
+        };
+      }
+    });
   }, []);
 
   // --- Persistence: restore on mount, save every 15s if playing ---
@@ -241,16 +274,29 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
     });
   }, []);
 
+  // Fallback timers for each queue
+  const fallbackTimers = useRef<Record<QueueId, ReturnType<typeof setTimeout> | null>>({
+    queue1: null,
+    queue2: null,
+    queue3: null,
+  });
+
   const playTrack: (queueId: QueueId, track: ScannedTrack) => void = useCallback((queueId, track) => {
     // Stop and release previous sound if exists
     if (soundRefs.current[queueId]) {
       soundRefs.current[queueId]?.stop();
       soundRefs.current[queueId]?.release();
     }
+    // Clear any previous fallback timer
+    if (fallbackTimers.current[queueId]) {
+      clearTimeout(fallbackTimers.current[queueId]!);
+      fallbackTimers.current[queueId] = null;
+    }
     // Create new Sound instance
     const currentVolume = players[queueId]?.volume ?? 1.0;
     const sound = new Sound(track.path, Sound.MAIN_BUNDLE, (error) => {
       if (error) {
+        debugPlaybackLog(`[${queueId}] Sound load error:`, error);
         setPlayers(prev => ({
           ...prev,
           [queueId]: { ...prev[queueId], isPlaying: false, sound: null, duration: 0, position: 0 }
@@ -262,12 +308,32 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       } catch {
         // ignore
       }
+      const durationMs = sound.getDuration() * 1000;
       setPlayers(prev => ({
         ...prev,
-        [queueId]: { ...prev[queueId], duration: sound.getDuration() * 1000 }
+        [queueId]: { ...prev[queueId], duration: durationMs }
       }));
+      debugPlaybackLog(`[${queueId}] Loaded. Duration: ${durationMs}ms`);
+      // Fallback timer: set for each new track, always clear previous first
+      if (durationMs > 0) {
+        fallbackTimers.current[queueId] = setTimeout(() => {
+          debugPlaybackLog(`[${queueId}] Fallback timer fired, calling playNext.`);
+          fallbackTimers.current[queueId] = null;
+          playNext(queueId);
+        }, durationMs + 500); // Add 0.5s buffer
+        debugPlaybackLog(`[${queueId}] Fallback timer set for ${durationMs + 500}ms`);
+      } else {
+        debugPlaybackLog(`[${queueId}] No valid duration, fallback timer not set.`);
+      }
       sound.play((success) => {
+        if (fallbackTimers.current[queueId]) {
+          clearTimeout(fallbackTimers.current[queueId]!);
+          fallbackTimers.current[queueId] = null;
+          debugPlaybackLog(`[${queueId}] Fallback timer cleared in play() callback.`);
+        }
+        debugPlaybackLog(`[${queueId}] play() callback fired. Success: ${success}`);
         if (success) {
+          debugPlaybackLog(`[${queueId}] play() callback fired with success=true, calling playNext.`);
           playNext(queueId);
         } else {
           setPlayers(prev => ({
@@ -355,6 +421,11 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   }, []);
 
   const pause = useCallback((queueId: QueueId) => {
+    // Clear fallback timer if present
+    if (fallbackTimers.current[queueId]) {
+      clearTimeout(fallbackTimers.current[queueId]!);
+      fallbackTimers.current[queueId] = null;
+    }
     const sound = soundRefs.current[queueId];
     if (sound) sound.pause();
     setPlayers(prev => ({
@@ -365,11 +436,30 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
 
   const seekTo = useCallback((queueId: QueueId, ms: number) => {
     const sound = soundRefs.current[queueId];
+    // Clear any existing fallback timer
+    if (fallbackTimers.current[queueId]) {
+      clearTimeout(fallbackTimers.current[queueId]!);
+      fallbackTimers.current[queueId] = null;
+      debugPlaybackLog(`[${queueId}] Fallback timer cleared in seekTo.`);
+    }
     if (sound) sound.setCurrentTime(ms / 1000);
-    setPlayers(prev => ({
-      ...prev,
-      [queueId]: { ...prev[queueId], position: ms }
-    }));
+    setPlayers(prev => {
+      const prevPlayer = prev[queueId];
+      // If playing, set a new fallback timer for the remaining duration
+      if (prevPlayer.isPlaying && prevPlayer.duration > 0 && ms < prevPlayer.duration) {
+        const remaining = prevPlayer.duration - ms;
+        fallbackTimers.current[queueId] = setTimeout(() => {
+          debugPlaybackLog(`[${queueId}] Fallback timer fired after seek, calling playNext.`);
+          fallbackTimers.current[queueId] = null;
+          playNext(queueId);
+        }, remaining + 500);
+        debugPlaybackLog(`[${queueId}] Fallback timer set after seek for ${remaining + 500}ms`);
+      }
+      return {
+        ...prev,
+        [queueId]: { ...prevPlayer, position: ms }
+      };
+    });
   }, []);
 
   const setIsPlaying = useCallback((queueId: QueueId, playing: boolean) => {
@@ -403,12 +493,37 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
 
 
   // Attach pauseAllQueues and resumeAllQueues to globalThis for TrackPlayer service
+  // Track last active queue for resume
+  const lastActiveQueueRef = useRef<QueueId | null>(null);
+  useEffect(() => {
+    // Update lastActiveQueueRef when any queue is playing
+    const playingQueue = (Object.keys(players) as QueueId[]).find(qid => players[qid].isPlaying);
+    if (playingQueue) {
+      lastActiveQueueRef.current = playingQueue;
+    }
+  }, [players]);
+
   if (typeof globalThis !== 'undefined') {
-    (globalThis as any).pauseAllQueues = () => {
-      (['queue1', 'queue2', 'queue3'] as QueueId[]).forEach(qid => pause(qid));
-    };
-    (globalThis as any).resumeAllQueues = () => {
-      (['queue1', 'queue2', 'queue3'] as QueueId[]).forEach(qid => play(qid));
+    (globalThis as any).mediaButtonToggleAllQueues = () => {
+      const queueIds = ['queue1', 'queue2', 'queue3'] as QueueId[];
+      // Find all queues that are paused but have tracks
+      const pausedWithTracks = queueIds.filter(qid => !players[qid].isPlaying && players[qid].queue.length > 0);
+      if (pausedWithTracks.length > 0) {
+        // Resume all paused queues with tracks
+        pausedWithTracks.forEach(qid => {
+          const player = players[qid];
+          if (player.currentTrack) {
+            play(qid);
+          } else if (player.queue.length > 0) {
+            playTrack(qid, player.queue[0]);
+          }
+        });
+      } else {
+        // Otherwise, pause all playing queues
+        queueIds.forEach(qid => {
+          if (players[qid].isPlaying) pause(qid);
+        });
+      }
     };
   }
 

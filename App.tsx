@@ -5,8 +5,12 @@
  * @format
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useContext } from 'react';
+import { usePerQueuePlayer } from './src/context/PerQueuePlayerContext';
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+
+// Force instantiation of the native module at startup
+const _forceMediaButtonModule = NativeModules.MediaButton;
 import { StatusBar, StyleSheet, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as PaperProvider } from 'react-native-paper';
@@ -16,30 +20,26 @@ import { PerQueuePlayerProvider } from './src/context/PerQueuePlayerContext';
 import { QueueProvider } from './src/context/QueueContext';
 import { AllTracksProvider } from './src/context/AllTracksContext';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  // Listen for headset/media button events from native module
+// Handles headset/media button events using the player context
+function MediaButtonHandler() {
+  const perQueuePlayer = usePerQueuePlayer();
   useEffect(() => {
     if (Platform.OS === 'android' && NativeModules.MediaButton) {
       const emitter = new NativeEventEmitter(NativeModules.MediaButton);
       const sub = emitter.addListener('MediaButton', (action: string) => {
-        // You can customize this logic as needed
         if (action === 'playpause' || action === 'play' || action === 'pause') {
-          // Pause/resume all queues
-          if (typeof (globalThis as any).pauseAllQueues === 'function' && (action === 'pause' || action === 'playpause')) {
-            (globalThis as any).pauseAllQueues();
-          }
-          if (typeof (globalThis as any).resumeAllQueues === 'function' && (action === 'play' || action === 'playpause')) {
-            (globalThis as any).resumeAllQueues();
+          if (typeof (globalThis as any).mediaButtonToggleAllQueues === 'function') {
+            (globalThis as any).mediaButtonToggleAllQueues();
           }
         }
-        // Add next/previous support if needed
       });
       return () => sub.remove();
     }
-  }, []);
-
+  }, [perQueuePlayer.players]);
+  return null;
+}
+function App() {
+  const isDarkMode = useColorScheme() === 'dark';
   return (
     <PerQueuePlayerProvider>
       <QueueProvider>
@@ -48,6 +48,7 @@ function App() {
             <SafeAreaProvider>
               <PaperProvider>
                 <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+                <MediaButtonHandler />
                 <AppNavigator />
               </PaperProvider>
             </SafeAreaProvider>

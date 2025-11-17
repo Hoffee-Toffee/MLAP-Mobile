@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
+import { Avatar } from 'react-native-paper';
 import { useMultiQueue } from '../context/MultiQueueContext';
 import { usePerQueuePlayer } from '../context/PerQueuePlayerContext';
 import { useTheme } from 'react-native-paper';
@@ -17,7 +18,15 @@ const QueueScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <QueueHeader />
-      <SongList tracks={queue} />
+      {queue.length === 0 ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Avatar.Icon size={120} icon="playlist-remove" style={{ marginBottom: 24 }} />
+          <Text style={{ fontSize: 20, color: theme.colors.onBackground, marginBottom: 8 }}>Queue is empty</Text>
+          <Text style={{ color: theme.colors.onBackground + '99' }}>Add songs to this queue to get started.</Text>
+        </View>
+      ) : (
+        <SongList tracks={queue} />
+      )}
     </View>
   );
 };

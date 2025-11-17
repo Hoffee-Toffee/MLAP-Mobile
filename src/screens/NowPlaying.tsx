@@ -202,11 +202,12 @@ const NowPlaying: React.FC = () => {
         <RNView style={styles.queueSwitcherWrap}>
           <TopBar showMenu={false} iconColor={theme.colors.onPrimary} />
         </RNView>
+        <Appbar.Action icon="playlist-music" color={theme.colors.onPrimary} onPress={() => navigation.navigate('Queue')} accessibilityLabel="View Queue" />
       </Appbar.Header>
 
-      {/* Song artwork and info */}
-      {currentTrack && (
+      {currentTrack ? (
         <>
+          {/* Song artwork and info */}
           <View style={styles.artworkContainer}>
             {currentTrack.picture ? (
               <Avatar.Image size={180} source={{ uri: currentTrack.picture.startsWith('/') ? 'file://' + currentTrack.picture : currentTrack.picture }} />
@@ -218,60 +219,66 @@ const NowPlaying: React.FC = () => {
             <Text style={[styles.titleText, { color: theme.colors.onBackground }]} numberOfLines={1}>{currentTrack.title ?? 'Unknown'}</Text>
             <Text style={[styles.artistText, { color: theme.colors.onBackground }]} numberOfLines={1}>{currentTrack.artist ?? 'Unknown artist'}</Text>
           </View>
+
+          {/* Progress bar with drag-to-seek and tap-to-seek (larger touch area) */}
+          <View style={styles.progressBarContainer}>
+            <View
+              style={[styles.progressBarTrack, { backgroundColor: 'transparent', height: 32, paddingHorizontal: 0, marginHorizontal: 0 }]}
+              onLayout={e => setBarWidth(e.nativeEvent.layout.width)}
+              {...seekBarPanResponder.panHandlers}
+            >
+              {/* Unfilled track */}
+              <View style={[styles.progressBarBg, { backgroundColor: theme.colors.onBackground + '33' }]} />
+              {/* Filled portion */}
+              <View style={[styles.progressBarFill, { width: `${progressPercent * 100}%`, backgroundColor: theme.colors.onPrimary }]} />
+              <Pressable
+                style={styles.progressBarTouch}
+                hitSlop={{ top: 16, bottom: 16, left: 0, right: 0 }}
+                onPress={e => handleSeek(e.nativeEvent.locationX)}
+              />
+            </View>
+            <View style={styles.progressBarTimeRow}>
+              <Text style={{ color: theme.colors.onBackground }}>{formatDuration(isSeeking && seekPosition !== null ? seekPosition : position)}</Text>
+              <Text style={{ color: theme.colors.onBackground }}>{formatDuration(duration)}</Text>
+            </View>
+          </View>
+
+          {/* Volume slider with drag-to-set and expanded interaction area */}
+          <View style={styles.volumeRow}>
+            <Text style={[styles.volumePercent, { color: theme.colors.onBackground }]}>{Math.round(volume * 100)}%</Text>
+            <View style={styles.volumeSliderTrackRow}>
+              <VolumeSlider
+                value={volume}
+                onChange={handleVolumeChange}
+              />
+            </View>
+          </View>
+
+          {/* Controls */}
+          <View style={styles.controlsRow}>
+            <TouchableOpacity style={styles.controlButton} onPress={() => playPrevious(selectedQueue)}>
+              <Avatar.Icon size={48} icon="skip-previous" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.controlButton}
+              onPress={() => {
+                isPlaying ? pause(selectedQueue) : play(selectedQueue);
+              }}
+            >
+              <Avatar.Icon size={64} icon={isPlaying ? 'pause-circle' : 'play-circle'} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlButton} onPress={() => playNext(selectedQueue)}>
+              <Avatar.Icon size={48} icon="skip-next" />
+            </TouchableOpacity>
+          </View>
         </>
+      ) : (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Avatar.Icon size={120} icon="music-off" style={{ marginBottom: 24 }} />
+          <Text style={{ fontSize: 20, color: theme.colors.onBackground, marginBottom: 8 }}>No track playing</Text>
+          <Text style={{ color: theme.colors.onBackground + '99' }}>Add songs to the queue to start playback.</Text>
+        </View>
       )}
-
-      {/* Progress bar with drag-to-seek and tap-to-seek (larger touch area) */}
-      <View style={styles.progressBarContainer}>
-        <View
-          style={[styles.progressBarTrack, { backgroundColor: 'transparent', height: 32, paddingHorizontal: 0, marginHorizontal: 0 }]}
-          onLayout={e => setBarWidth(e.nativeEvent.layout.width)}
-          {...seekBarPanResponder.panHandlers}
-        >
-          {/* Unfilled track */}
-          <View style={[styles.progressBarBg, { backgroundColor: theme.colors.onBackground + '33' }]} />
-          {/* Filled portion */}
-          <View style={[styles.progressBarFill, { width: `${progressPercent * 100}%`, backgroundColor: theme.colors.onPrimary }]} />
-          <Pressable
-            style={styles.progressBarTouch}
-            hitSlop={{ top: 16, bottom: 16, left: 0, right: 0 }}
-            onPress={e => handleSeek(e.nativeEvent.locationX)}
-          />
-        </View>
-        <View style={styles.progressBarTimeRow}>
-          <Text style={{ color: theme.colors.onBackground }}>{formatDuration(isSeeking && seekPosition !== null ? seekPosition : position)}</Text>
-          <Text style={{ color: theme.colors.onBackground }}>{formatDuration(duration)}</Text>
-        </View>
-      </View>
-
-      {/* Volume slider with drag-to-set and expanded interaction area */}
-      <View style={styles.volumeRow}>
-        <Text style={[styles.volumePercent, { color: theme.colors.onBackground }]}>{Math.round(volume * 100)}%</Text>
-        <View style={styles.volumeSliderTrackRow}>
-          <VolumeSlider
-            value={volume}
-            onChange={handleVolumeChange}
-          />
-        </View>
-      </View>
-
-      {/* Controls */}
-      <View style={styles.controlsRow}>
-        <TouchableOpacity style={styles.controlButton} onPress={() => playPrevious(selectedQueue)}>
-          <Avatar.Icon size={48} icon="skip-previous" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={() => {
-            isPlaying ? pause(selectedQueue) : play(selectedQueue);
-          }}
-        >
-          <Avatar.Icon size={64} icon={isPlaying ? 'pause-circle' : 'play-circle'} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.controlButton} onPress={() => playNext(selectedQueue)}>
-          <Avatar.Icon size={48} icon="skip-next" />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
