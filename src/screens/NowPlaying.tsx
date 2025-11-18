@@ -83,16 +83,16 @@ function formatDuration(ms?: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-import { Appbar } from 'react-native-paper';
+import { Appbar, IconButton } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import TopBar from '../components/TopBar';
 
 const NowPlaying: React.FC = () => {
   const navigation = useNavigation();
   const { selectedQueue } = useMultiQueue();
-  const { players, play, pause, seekTo, playNext, playPrevious, setVolume, getVolume } = usePerQueuePlayer();
+  const { players, play, pause, seekTo, playNext, playPrevious, setVolume, getVolume, toggleShuffle, toggleLoopMode } = usePerQueuePlayer();
   const player = players[selectedQueue];
-  const { currentTrack, position, duration, isPlaying } = player;
+  const { currentTrack, position, duration, isPlaying, shuffle, loopMode } = player;
 
   // For measuring progress bar width
   const [barWidth, setBarWidth] = useState(0);
@@ -254,8 +254,16 @@ const NowPlaying: React.FC = () => {
             </View>
           </View>
 
-          {/* Controls */}
+          {/* Controls with shuffle/loop */}
           <View style={styles.controlsRow}>
+            <IconButton
+              icon={shuffle ? 'shuffle-variant' : 'shuffle-disabled'}
+              size={32}
+              onPress={() => toggleShuffle(selectedQueue)}
+              style={styles.controlButton}
+              accessibilityLabel="Toggle Shuffle"
+              iconColor={shuffle ? theme.colors.primary : theme.colors.onBackground}
+            />
             <TouchableOpacity style={styles.controlButton} onPress={() => playPrevious(selectedQueue)}>
               <Avatar.Icon size={48} icon="skip-previous" />
             </TouchableOpacity>
@@ -270,6 +278,18 @@ const NowPlaying: React.FC = () => {
             <TouchableOpacity style={styles.controlButton} onPress={() => playNext(selectedQueue)}>
               <Avatar.Icon size={48} icon="skip-next" />
             </TouchableOpacity>
+            <IconButton
+              icon={
+                loopMode === 'off' ? 'repeat-off'
+                  : loopMode === 'all' ? 'repeat'
+                    : 'repeat-once'
+              }
+              size={32}
+              onPress={() => toggleLoopMode(selectedQueue)}
+              style={styles.controlButton}
+              accessibilityLabel="Toggle Loop Mode"
+              iconColor={loopMode === 'off' ? theme.colors.onBackground : theme.colors.primary}
+            />
           </View>
         </>
       ) : (

@@ -27,6 +27,8 @@ import type { ScannedTrack } from '../utils/musicScanner';
 
 export type QueueId = 'queue1' | 'queue2' | 'queue3';
 
+type LoopMode = 'off' | 'all' | 'one';
+
 interface PlayerState {
   currentTrack: ScannedTrack | null;
   queue: ScannedTrack[];
@@ -35,11 +37,14 @@ interface PlayerState {
   duration: number;
   sound: Sound | null;
   volume: number; // 0.0 to 1.0
+  shuffle: boolean;
+  loopMode: LoopMode;
+  shuffledQueue: ScannedTrack[] | null; // null if not shuffled
 }
 
 interface PerQueuePlayerContextProps {
   players: Record<QueueId, PlayerState>;
-  setQueue: (queueId: QueueId, tracks: ScannedTrack[]) => void;
+  setQueue: (queueId: QueueId, tracks: ScannedTrack[], options?: { clearAllState?: boolean }) => void;
   playTrack: (queueId: QueueId, track: ScannedTrack) => void;
   play: (queueId: QueueId) => void;
   pause: (queueId: QueueId) => void;
@@ -54,6 +59,8 @@ interface PerQueuePlayerContextProps {
   setDuration: (queueId: QueueId, dur: number) => void;
   setVolume: (queueId: QueueId, volume: number) => void;
   getVolume: (queueId: QueueId) => number;
+  toggleShuffle: (queueId: QueueId) => void;
+  toggleLoopMode: (queueId: QueueId) => void;
 }
 
 const defaultPlayerState: PlayerState = {
@@ -64,6 +71,9 @@ const defaultPlayerState: PlayerState = {
   duration: 0,
   sound: null,
   volume: 1.0,
+  shuffle: false,
+  loopMode: 'off',
+  shuffledQueue: null,
 };
 
 export const PerQueuePlayerContext = createContext<PerQueuePlayerContextProps | undefined>(undefined);
@@ -86,7 +96,8 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   const setQueue = useCallback((queueId: QueueId, tracks: ScannedTrack[], options?: SetQueueOptions) => {
     setPlayers(prev => {
       if (options?.clearAllState && tracks.length === 0) {
-        // Clear all state for this queue
+        // Clear all state for this queue, but keep volume, shuffle, and loopMode
+        const { volume, shuffle, loopMode } = prev[queueId];
         return {
           ...prev,
           [queueId]: {
@@ -97,7 +108,9 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
             isPlaying: false,
             position: 0,
             duration: 0,
-            // keep volume
+            volume,
+            shuffle,
+            loopMode,
           },
         };
       } else {
@@ -120,6 +133,8 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       if (!persisted || !mounted) return;
       (Object.keys(persisted) as QueueId[]).forEach(queueId => {
         const p = persisted[queueId];
+        const shuffle = p?.shuffle ?? false;
+        const loopMode = p?.loopMode ?? 'off';
         if (p && p.currentTrackId) {
           const track = p.queue.find(t => t.id === p.currentTrackId) || null;
           if (track) {
@@ -148,6 +163,8 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
                 volume: p.volume,
                 isPlaying: false,
                 sound,
+                shuffle,
+                loopMode,
                 // duration will be set in callback above
               }
             }));
@@ -164,6 +181,8 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
                 isPlaying: false,
                 sound: null,
                 duration: 0,
+                shuffle,
+                loopMode,
               }
             }));
           }
@@ -180,6 +199,8 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
               isPlaying: false,
               sound: null,
               duration: 0,
+              shuffle,
+              loopMode,
             }
           }));
         }
@@ -205,9 +226,37 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
         currentTrackId: p.currentTrack?.id || null,
         position: p.position,
         volume: p.volume,
+        shuffle: p.shuffle,
+        loopMode: p.loopMode,
       };
     });
     savePlayerState(state);
+  }, [players]);
+  // Save state every 10 seconds (queue, track, position, volume, shuffle, loopMode) for all queues, even if paused
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const state: PersistedState = {};
+      (Object.keys(players) as QueueId[]).forEach(queueId => {
+        const p = players[queueId];
+        state[queueId] = {
+          queue: p.queue.map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            path: t.path,
+            picture: t.picture,
+          })),
+          currentTrackId: p.currentTrack?.id || null,
+          position: p.position,
+          volume: p.volume,
+          shuffle: p.shuffle,
+          loopMode: p.loopMode,
+        };
+      });
+      savePlayerState(state);
+    }, 10000); // every 10 seconds
+    return () => clearInterval(interval);
   }, [players]);
 
   // --- End persistence ---
@@ -263,13 +312,32 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   const playTrackRef = useRef<(queueId: QueueId, track: ScannedTrack) => void | undefined>(undefined);
   const playNext: (queueId: QueueId) => void = useCallback((queueId) => {
     setPlayers(prev => {
-      const { queue, currentTrack } = prev[queueId];
-      if (!queue.length || !currentTrack) return prev;
-      const idx = queue.findIndex(t => t.id === currentTrack.id);
-      const nextIdx = idx >= 0 && idx < queue.length - 1 ? idx + 1 : 0;
-      if (nextIdx < 0 || nextIdx >= queue.length) return prev;
-      const nextTrack = queue[nextIdx];
-      setTimeout(() => playTrackRef.current?.(queueId, nextTrack), 0);
+      const player = prev[queueId];
+      const { queue, currentTrack, shuffle, loopMode, shuffledQueue } = player;
+      const activeQueue = shuffle && shuffledQueue ? shuffledQueue : queue;
+      if (!activeQueue.length || !currentTrack) return prev;
+      const idx = activeQueue.findIndex(t => t.id === currentTrack.id);
+      let nextIdx = idx + 1;
+      let nextTrack: ScannedTrack | undefined;
+      if (loopMode === 'one') {
+        // Replay current track
+        setTimeout(() => playTrackRef.current?.(queueId, currentTrack), 0);
+        return prev;
+      }
+      if (nextIdx < activeQueue.length) {
+        nextTrack = activeQueue[nextIdx];
+      } else if (loopMode === 'all') {
+        nextTrack = activeQueue[0];
+      } else {
+        // Stop playback at end
+        return {
+          ...prev,
+          [queueId]: { ...player, isPlaying: false }
+        };
+      }
+      if (nextTrack) {
+        setTimeout(() => playTrackRef.current?.(queueId, nextTrack!), 0);
+      }
       return prev;
     });
   }, []);
@@ -317,9 +385,17 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       // Fallback timer: set for each new track, always clear previous first
       if (durationMs > 0) {
         fallbackTimers.current[queueId] = setTimeout(() => {
-          debugPlaybackLog(`[${queueId}] Fallback timer fired, calling playNext.`);
+          debugPlaybackLog(`[${queueId}] Fallback timer fired.`);
           fallbackTimers.current[queueId] = null;
-          playNext(queueId);
+          // For loop one, replay current track instead of playNext
+          const player = players[queueId];
+          if (player && player.loopMode === 'one' && player.currentTrack) {
+            debugPlaybackLog(`[${queueId}] Loop one: replaying current track.`);
+            playTrackRef.current?.(queueId, player.currentTrack);
+          } else {
+            debugPlaybackLog(`[${queueId}] Calling playNext.`);
+            playNext(queueId);
+          }
         }, durationMs + 500); // Add 0.5s buffer
         debugPlaybackLog(`[${queueId}] Fallback timer set for ${durationMs + 500}ms`);
       } else {
@@ -359,16 +435,65 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
 
   const playPrevious = useCallback((queueId: QueueId) => {
     setPlayers(prev => {
-      const { queue, currentTrack } = prev[queueId];
-      if (!queue.length || !currentTrack) return prev;
-      const idx = queue.findIndex(t => t.id === currentTrack.id);
+      const player = prev[queueId];
+      const { queue, currentTrack, shuffle, shuffledQueue } = player;
+      const activeQueue = shuffle && shuffledQueue ? shuffledQueue : queue;
+      if (!activeQueue.length || !currentTrack) return prev;
+      const idx = activeQueue.findIndex(t => t.id === currentTrack.id);
       const prevIdx = idx > 0 ? idx - 1 : 0;
-      if (prevIdx < 0 || prevIdx >= queue.length) return prev;
-      const prevTrack = queue[prevIdx];
+      if (prevIdx < 0 || prevIdx >= activeQueue.length) return prev;
+      const prevTrack = activeQueue[prevIdx];
       setTimeout(() => playTrack(queueId, prevTrack), 0);
       return prev;
     });
   }, [playTrack]);
+  // Shuffle/loop logic
+  function shuffleArray<T>(array: T[]): T[] {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  const toggleShuffle = useCallback((queueId: QueueId) => {
+    setPlayers(prev => {
+      const player = prev[queueId];
+      const newShuffle = !player.shuffle;
+      let newShuffledQueue: ScannedTrack[] | null = null;
+      if (newShuffle && player.queue.length > 1) {
+        // Shuffle, but keep currentTrack at front if playing
+        const rest = player.queue.filter(t => t.id !== player.currentTrack?.id);
+        newShuffledQueue = player.currentTrack ? [player.currentTrack, ...shuffleArray(rest)] : shuffleArray(player.queue);
+      }
+      return {
+        ...prev,
+        [queueId]: {
+          ...player,
+          shuffle: newShuffle,
+          shuffledQueue: newShuffle ? newShuffledQueue : null,
+        }
+      };
+    });
+  }, []);
+
+  const toggleLoopMode = useCallback((queueId: QueueId) => {
+    setPlayers(prev => {
+      const player = prev[queueId];
+      let newMode: LoopMode;
+      if (player.loopMode === 'off') newMode = 'all';
+      else if (player.loopMode === 'all') newMode = 'one';
+      else newMode = 'off';
+      return {
+        ...prev,
+        [queueId]: {
+          ...player,
+          loopMode: newMode,
+        }
+      };
+    });
+  }, []);
 
   const addToQueue = useCallback((queueId: QueueId, track: ScannedTrack) => {
     setPlayers(prev => ({
@@ -528,7 +653,7 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   }
 
   return (
-    <PerQueuePlayerContext.Provider value={{ players, setQueue, playTrack, play, pause, seekTo, playNext, playPrevious, addToQueue, removeFromQueue, reorderQueue, setIsPlaying, setPosition, setDuration, setVolume, getVolume }}>
+    <PerQueuePlayerContext.Provider value={{ players, setQueue, playTrack, play, pause, seekTo, playNext, playPrevious, addToQueue, removeFromQueue, reorderQueue, setIsPlaying, setPosition, setDuration, setVolume, getVolume, toggleShuffle, toggleLoopMode }}>
       {children}
     </PerQueuePlayerContext.Provider>
   );

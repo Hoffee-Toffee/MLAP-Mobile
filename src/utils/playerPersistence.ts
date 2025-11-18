@@ -14,6 +14,8 @@ export interface PersistedQueueState {
   currentTrackId: string | null;
   position: number;
   volume: number;
+  shuffle?: boolean;
+  loopMode?: 'off' | 'all' | 'one';
 }
 
 export interface PersistedState {
