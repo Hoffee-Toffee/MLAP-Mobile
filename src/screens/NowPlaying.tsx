@@ -1,3 +1,7 @@
+import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+// Native notification module (Android only)
+const NPNotification = Platform.OS === 'android' && NativeModules.NowPlayingNotification;
+const NPNotificationEmitter = NPNotification ? new NativeEventEmitter(NPNotification) : null;
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { PanResponder, View, Pressable } from 'react-native';
@@ -88,6 +92,25 @@ import { useNavigation } from '@react-navigation/native';
 import TopBar from '../components/TopBar';
 
 const NowPlaying: React.FC = () => {
+  // Notification event handler
+  useEffect(() => {
+    if (!NPNotificationEmitter) return;
+    const sub = NPNotificationEmitter.addListener('NowPlayingNotification', (action: string) => {
+      if (action === 'playpause') {
+        isPlaying ? pause(selectedQueue) : play(selectedQueue);
+      } else if (action === 'next') {
+        playNext(selectedQueue);
+      } else if (action === 'previous') {
+        playPrevious(selectedQueue);
+      }
+    });
+    return () => sub.remove();
+  }, [isPlaying, selectedQueue, play, pause, playNext, playPrevious]);
+
+  // Show/update notification when track or playback state changes
+  useEffect(() => {
+    // Notification logic moved to player context for all queues
+  }, []);
   const navigation = useNavigation();
   const { selectedQueue } = useMultiQueue();
   const { players, play, pause, seekTo, playNext, playPrevious, setVolume, getVolume, toggleShuffle, toggleLoopMode } = usePerQueuePlayer();

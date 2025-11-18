@@ -1,3 +1,4 @@
+
 // TypeScript: declare on globalThis for type safety (top-level)
 declare global {
 
@@ -84,6 +85,28 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
     queue2: { ...defaultPlayerState },
     queue3: { ...defaultPlayerState },
   });
+
+  // Show/update notification when any queue's track or playback state changes (Android only)
+  React.useEffect(() => {
+    const { Platform, NativeModules } = require('react-native');
+    if (Platform.OS !== 'android') return;
+    const { NowPlayingNotification } = NativeModules;
+    if (!NowPlayingNotification) return;
+    const queueToId: Record<string, number> = { queue1: 1001, queue2: 1002, queue3: 1003 };
+    (Object.keys(players) as QueueId[]).forEach(queueId => {
+      const player = players[queueId];
+      if (!player.currentTrack) return;
+      const notifTrack = {
+        title: player.currentTrack.title,
+        artist: player.currentTrack.artist,
+        artwork: player.currentTrack.picture || null,
+      };
+      const notificationId = queueToId[queueId] || 1000;
+      try {
+        NowPlayingNotification.showNotification(notifTrack, player.isPlaying, notificationId);
+      } catch { }
+    });
+  }, [players]);
 
   // Keep refs to Sound objects so they persist across renders
   const soundRefs = useRef<Record<QueueId, Sound | null>>({
