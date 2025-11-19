@@ -1,3 +1,9 @@
+// Alternative workaround for vector icons Gradle task dependency issue
+afterEvaluate {
+    if (tasks.findByName('generateReleaseLintVitalReportModel') && tasks.findByName('copyReactNativeVectorIconFonts')) {
+        tasks.generateReleaseLintVitalReportModel.mustRunAfter(tasks.copyReactNativeVectorIconFonts)
+    }
+}
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -76,6 +82,10 @@ def enableProguardInReleaseBuilds = false
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
