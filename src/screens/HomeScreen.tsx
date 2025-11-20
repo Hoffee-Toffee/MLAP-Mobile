@@ -48,7 +48,7 @@ const HomeScreen: React.FC = () => {
   const { tracks, loading } = useAllTracks();
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, flexDirection: 'column' }}>
       <TopBar onMenuPress={() => setDrawerVisible(true)} />
       <Portal>
         <Modal
@@ -66,7 +66,6 @@ const HomeScreen: React.FC = () => {
       </Portal>
 
       {/* Tabs navigation */}
-      {/* Only show tab bar if on HomeScreen (not NowPlaying, not Queue) */}
       <View style={{ width: '100%' }}>
         <ScrollView
           horizontal
@@ -83,7 +82,7 @@ const HomeScreen: React.FC = () => {
         </ScrollView>
       </View>
 
-      <View style={styles.flex1}>
+      <View style={{ flex: 1, flexDirection: 'column' }}>
         {loading ? (
           <View style={styles.centered}>
             <ActivityIndicator animating={true} size={36} />
@@ -102,7 +101,6 @@ const HomeScreen: React.FC = () => {
           ) : null
         )}
       </View>
-
 
       <NowPlayingBar onPress={() => navigation.navigate('NowPlaying' as never)} />
     </View>

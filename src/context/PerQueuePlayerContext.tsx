@@ -342,11 +342,6 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       const idx = activeQueue.findIndex(t => t.id === currentTrack.id);
       let nextIdx = idx + 1;
       let nextTrack: ScannedTrack | undefined;
-      if (loopMode === 'one') {
-        // Replay current track
-        setTimeout(() => playTrackRef.current?.(queueId, currentTrack), 0);
-        return prev;
-      }
       if (nextIdx < activeQueue.length) {
         nextTrack = activeQueue[nextIdx];
       } else if (loopMode === 'all') {
@@ -364,6 +359,8 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       return prev;
     });
   }, []);
+  // Manual next: always skip/wrap
+  // (see below for single correct playNext)
 
   // Fallback timers for each queue
   const fallbackTimers = useRef<Record<QueueId, ReturnType<typeof setTimeout> | null>>({
@@ -410,15 +407,36 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
         fallbackTimers.current[queueId] = setTimeout(() => {
           debugPlaybackLog(`[${queueId}] Fallback timer fired.`);
           fallbackTimers.current[queueId] = null;
-          // For loop one, replay current track instead of playNext
-          const player = players[queueId];
-          if (player && player.loopMode === 'one' && player.currentTrack) {
-            debugPlaybackLog(`[${queueId}] Loop one: replaying current track.`);
-            playTrackRef.current?.(queueId, player.currentTrack);
-          } else {
-            debugPlaybackLog(`[${queueId}] Calling playNext.`);
-            playNext(queueId);
-          }
+          // Defensive: always get latest player state
+          setPlayers(prev => {
+            const player = prev[queueId];
+            if (!player) return prev;
+            if (player.loopMode === 'one' && player.currentTrack) {
+              debugPlaybackLog(`[${queueId}] Loop one: replaying current track (fallback timer).`);
+              playTrackRef.current?.(queueId, player.currentTrack);
+            } else if (player.loopMode === 'all') {
+              // Always wrap to first track if at end
+              const activeQueue = player.shuffle && player.shuffledQueue ? player.shuffledQueue : player.queue;
+              if (activeQueue.length > 0) {
+                debugPlaybackLog(`[${queueId}] Loop all: wrapping to next track (fallback timer).`);
+                playNext(queueId);
+              } else {
+                debugPlaybackLog(`[${queueId}] Loop all: queue empty, cannot wrap.`);
+                return {
+                  ...prev,
+                  [queueId]: { ...player, isPlaying: false }
+                };
+              }
+            } else {
+              // Loop off: stop at end
+              debugPlaybackLog(`[${queueId}] Loop off: stopping playback (fallback timer).`);
+              return {
+                ...prev,
+                [queueId]: { ...player, isPlaying: false }
+              };
+            }
+            return prev;
+          });
         }, durationMs + 500); // Add 0.5s buffer
         debugPlaybackLog(`[${queueId}] Fallback timer set for ${durationMs + 500}ms`);
       } else {
@@ -431,15 +449,42 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
           debugPlaybackLog(`[${queueId}] Fallback timer cleared in play() callback.`);
         }
         debugPlaybackLog(`[${queueId}] play() callback fired. Success: ${success}`);
-        if (success) {
-          debugPlaybackLog(`[${queueId}] play() callback fired with success=true, calling playNext.`);
-          playNext(queueId);
-        } else {
-          setPlayers(prev => ({
-            ...prev,
-            [queueId]: { ...prev[queueId], isPlaying: false, position: 0 }
-          }));
-        }
+        // Defensive: always get latest player state
+        setPlayers(prev => {
+          const player = prev[queueId];
+          if (!player) return prev;
+          if (success) {
+            if (player.loopMode === 'one' && player.currentTrack) {
+              debugPlaybackLog(`[${queueId}] Loop one: replaying current track (play callback).`);
+              playTrackRef.current?.(queueId, player.currentTrack);
+            } else if (player.loopMode === 'all') {
+              const activeQueue = player.shuffle && player.shuffledQueue ? player.shuffledQueue : player.queue;
+              if (activeQueue.length > 0) {
+                debugPlaybackLog(`[${queueId}] Loop all: wrapping to next track (play callback).`);
+                playNext(queueId);
+              } else {
+                debugPlaybackLog(`[${queueId}] Loop all: queue empty, cannot wrap.`);
+                return {
+                  ...prev,
+                  [queueId]: { ...player, isPlaying: false }
+                };
+              }
+            } else {
+              debugPlaybackLog(`[${queueId}] Loop off: stopping playback (play callback).`);
+              return {
+                ...prev,
+                [queueId]: { ...player, isPlaying: false, position: 0 }
+              };
+            }
+          } else {
+            debugPlaybackLog(`[${queueId}] play() callback fired with success=false, stopping playback.`);
+            return {
+              ...prev,
+              [queueId]: { ...player, isPlaying: false, position: 0 }
+            };
+          }
+          return prev;
+        });
       });
     });
     soundRefs.current[queueId] = sound;
@@ -470,6 +515,8 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
       return prev;
     });
   }, [playTrack]);
+  // Manual prev: always skip/wrap
+  // (see below for single correct playPrevious)
   // Shuffle/loop logic
   function shuffleArray<T>(array: T[]): T[] {
     const arr = [...array];

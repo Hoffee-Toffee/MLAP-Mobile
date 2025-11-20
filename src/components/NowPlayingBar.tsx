@@ -71,10 +71,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   bar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     height: 64,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#ddd',

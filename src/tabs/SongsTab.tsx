@@ -14,7 +14,7 @@ type SongsTabProps = {
 
 const SongsTab: React.FC<SongsTabProps> = ({ tracks, onSongPlay }) => {
   const theme = useTheme();
-  const { setQueue, playTrack } = usePerQueuePlayer();
+  const { setQueue, playTrack, addToQueue } = usePerQueuePlayer();
   const { selectedQueue } = useMultiQueue();
   return (
     <FlatList
@@ -35,6 +35,19 @@ const SongsTab: React.FC<SongsTabProps> = ({ tracks, onSongPlay }) => {
           }}
           textColor={theme.colors.onBackground}
           backgroundColor={theme.colors.background}
+          onPlayNext={() => {
+            // Add this song after the current track in the queue
+            // (simple implementation: add to end)
+            addToQueue(selectedQueue, item);
+          }}
+          onAddToQueue={() => {
+            addToQueue(selectedQueue, item);
+          }}
+          onAddToPlaylist={() => {
+            // Placeholder: show a toast or modal in the future
+            // eslint-disable-next-line no-alert
+            alert('Add to playlist coming soon!');
+          }}
         />
       )}
       style={{ backgroundColor: theme.colors.background }}
