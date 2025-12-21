@@ -81,6 +81,18 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+import java.util.Properties
+
+def env(String key) {
+    def dotenvFile = rootProject.file(".env")
+    if (dotenvFile.exists()) {
+        def props = new Properties()
+        dotenvFile.withInputStream { stream -> props.load(stream) }
+        return props.getProperty(key)
+    }
+    return null
+}
+
 android {
     lint {
         checkReleaseBuilds false
@@ -95,8 +107,8 @@ android {
         applicationId "com.mlap"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "0.0.1"
     }
     signingConfigs {
         debug {
@@ -138,6 +150,11 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // ExoPlayer dependencies for native playback
+    implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
 }
 
 // Make sure react-native-vector-icons fonts are copied into the APK

@@ -283,16 +283,17 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   }, [players]);
 
   // --- End persistence ---
-  // Global polling for all active players to update position in context
+  // Global polling for all active players to update position in context (no auto-progression)
   useEffect(() => {
     const interval = setInterval(() => {
       setPlayers(prev => {
         (Object.keys(prev) as QueueId[]).forEach(queueId => {
           const sound = soundRefs.current[queueId];
-          if (sound && sound.isPlaying()) {
+          const player = prev[queueId];
+          if (sound) {
             sound.getCurrentTime((seconds) => {
               // Only update if position actually changed
-              if (Math.abs((prev[queueId].position / 1000) - seconds) > 0.01) {
+              if (Math.abs((player.position / 1000) - seconds) > 0.01) {
                 setPlayers(innerPrev => ({
                   ...innerPrev,
                   [queueId]: { ...innerPrev[queueId], position: seconds * 1000 }
@@ -317,11 +318,11 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
     if (sound) {
       try {
         sound.setVolume(volume);
-      } catch (e) {
+      } catch {
         // Defensive: ignore errors if sound is not ready
       }
     }
-  }, []);
+  }, [playNext]);
 
   // Get volume for a queue/player
   const getVolume = useCallback((queueId: QueueId) => {
@@ -362,23 +363,13 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   // Manual next: always skip/wrap
   // (see below for single correct playNext)
 
-  // Fallback timers for each queue
-  const fallbackTimers = useRef<Record<QueueId, ReturnType<typeof setTimeout> | null>>({
-    queue1: null,
-    queue2: null,
-    queue3: null,
-  });
+
 
   const playTrack: (queueId: QueueId, track: ScannedTrack) => void = useCallback((queueId, track) => {
     // Stop and release previous sound if exists
     if (soundRefs.current[queueId]) {
       soundRefs.current[queueId]?.stop();
       soundRefs.current[queueId]?.release();
-    }
-    // Clear any previous fallback timer
-    if (fallbackTimers.current[queueId]) {
-      clearTimeout(fallbackTimers.current[queueId]!);
-      fallbackTimers.current[queueId] = null;
     }
     // Create new Sound instance
     const currentVolume = players[queueId]?.volume ?? 1.0;
@@ -402,52 +393,7 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
         [queueId]: { ...prev[queueId], duration: durationMs }
       }));
       debugPlaybackLog(`[${queueId}] Loaded. Duration: ${durationMs}ms`);
-      // Fallback timer: set for each new track, always clear previous first
-      if (durationMs > 0) {
-        fallbackTimers.current[queueId] = setTimeout(() => {
-          debugPlaybackLog(`[${queueId}] Fallback timer fired.`);
-          fallbackTimers.current[queueId] = null;
-          // Defensive: always get latest player state
-          setPlayers(prev => {
-            const player = prev[queueId];
-            if (!player) return prev;
-            if (player.loopMode === 'one' && player.currentTrack) {
-              debugPlaybackLog(`[${queueId}] Loop one: replaying current track (fallback timer).`);
-              playTrackRef.current?.(queueId, player.currentTrack);
-            } else if (player.loopMode === 'all') {
-              // Always wrap to first track if at end
-              const activeQueue = player.shuffle && player.shuffledQueue ? player.shuffledQueue : player.queue;
-              if (activeQueue.length > 0) {
-                debugPlaybackLog(`[${queueId}] Loop all: wrapping to next track (fallback timer).`);
-                playNext(queueId);
-              } else {
-                debugPlaybackLog(`[${queueId}] Loop all: queue empty, cannot wrap.`);
-                return {
-                  ...prev,
-                  [queueId]: { ...player, isPlaying: false }
-                };
-              }
-            } else {
-              // Loop off: stop at end
-              debugPlaybackLog(`[${queueId}] Loop off: stopping playback (fallback timer).`);
-              return {
-                ...prev,
-                [queueId]: { ...player, isPlaying: false }
-              };
-            }
-            return prev;
-          });
-        }, durationMs + 500); // Add 0.5s buffer
-        debugPlaybackLog(`[${queueId}] Fallback timer set for ${durationMs + 500}ms`);
-      } else {
-        debugPlaybackLog(`[${queueId}] No valid duration, fallback timer not set.`);
-      }
       sound.play((success) => {
-        if (fallbackTimers.current[queueId]) {
-          clearTimeout(fallbackTimers.current[queueId]!);
-          fallbackTimers.current[queueId] = null;
-          debugPlaybackLog(`[${queueId}] Fallback timer cleared in play() callback.`);
-        }
         debugPlaybackLog(`[${queueId}] play() callback fired. Success: ${success}`);
         // Defensive: always get latest player state
         setPlayers(prev => {
@@ -616,11 +562,6 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   }, []);
 
   const pause = useCallback((queueId: QueueId) => {
-    // Clear fallback timer if present
-    if (fallbackTimers.current[queueId]) {
-      clearTimeout(fallbackTimers.current[queueId]!);
-      fallbackTimers.current[queueId] = null;
-    }
     const sound = soundRefs.current[queueId];
     if (sound) sound.pause();
     setPlayers(prev => ({
@@ -631,25 +572,9 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
 
   const seekTo = useCallback((queueId: QueueId, ms: number) => {
     const sound = soundRefs.current[queueId];
-    // Clear any existing fallback timer
-    if (fallbackTimers.current[queueId]) {
-      clearTimeout(fallbackTimers.current[queueId]!);
-      fallbackTimers.current[queueId] = null;
-      debugPlaybackLog(`[${queueId}] Fallback timer cleared in seekTo.`);
-    }
     if (sound) sound.setCurrentTime(ms / 1000);
     setPlayers(prev => {
       const prevPlayer = prev[queueId];
-      // If playing, set a new fallback timer for the remaining duration
-      if (prevPlayer.isPlaying && prevPlayer.duration > 0 && ms < prevPlayer.duration) {
-        const remaining = prevPlayer.duration - ms;
-        fallbackTimers.current[queueId] = setTimeout(() => {
-          debugPlaybackLog(`[${queueId}] Fallback timer fired after seek, calling playNext.`);
-          fallbackTimers.current[queueId] = null;
-          playNext(queueId);
-        }, remaining + 500);
-        debugPlaybackLog(`[${queueId}] Fallback timer set after seek for ${remaining + 500}ms`);
-      }
       return {
         ...prev,
         [queueId]: { ...prevPlayer, position: ms }
