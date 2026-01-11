@@ -1,10 +1,11 @@
+    // Expose static mediaSession for notification integration
 package com.mlap;
 import android.content.BroadcastReceiver;
 import android.util.Log;
 import android.media.AudioManager;
-import android.media.session.MediaSession;
-import android.media.session.MediaSessionManager;
-import android.media.session.PlaybackState;
+import androidx.media.session.MediaButtonReceiver;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.os.Handler;
 import android.os.Looper;
 import android.content.Context;
@@ -20,9 +21,11 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 public class MediaButtonModule extends ReactContextBaseJavaModule {
+        // public static MediaSessionCompat mediaSessionInstance = null; // Removed duplicate
     private final ReactApplicationContext reactContext;
     private BroadcastReceiver mediaButtonReceiver;
-    private MediaSession mediaSession;
+    private MediaSessionCompat mediaSession;
+    public static MediaSessionCompat mediaSessionInstance = null;
 
     public MediaButtonModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -122,15 +125,16 @@ public class MediaButtonModule extends ReactContextBaseJavaModule {
                         @Override
                         public void run() {
                             try {
-                                mediaSession = new MediaSession(reactContext, "MLAPMediaSession");
-                                mediaSession.setCallback(new MediaSession.Callback() {
+                                mediaSession = new MediaSessionCompat(reactContext, "MLAPMediaSession");
+                                MediaButtonModule.mediaSessionInstance = mediaSession;
+                                mediaSession.setCallback(new MediaSessionCompat.Callback() {
                                     @Override
                                     public boolean onMediaButtonEvent(Intent mediaButtonIntent) {
-                                        Log.d("MediaButtonModule", "MediaSession onMediaButtonEvent: " + mediaButtonIntent);
+                                        Log.d("MediaButtonModule", "MediaSessionCompat onMediaButtonEvent: " + mediaButtonIntent);
                                         if (mediaButtonIntent != null && Intent.ACTION_MEDIA_BUTTON.equals(mediaButtonIntent.getAction())) {
                                             KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
                                             if (event != null) {
-                                                Log.d("MediaButtonModule", "MediaSession KeyEvent: action=" + event.getAction() + ", code=" + event.getKeyCode());
+                                                Log.d("MediaButtonModule", "MediaSessionCompat KeyEvent: action=" + event.getAction() + ", code=" + event.getKeyCode());
                                                 if (event.getAction() == KeyEvent.ACTION_DOWN) {
                                                     int keyCode = event.getKeyCode();
                                                     String action = null;
@@ -154,36 +158,35 @@ public class MediaButtonModule extends ReactContextBaseJavaModule {
                                                             action = "previous";
                                                             break;
                                                         default:
-                                                            Log.d("MediaButtonModule", "MediaSession unknown keyCode: " + keyCode);
+                                                            Log.d("MediaButtonModule", "MediaSessionCompat unknown keyCode: " + keyCode);
                                                             break;
                                                     }
-                                                    Log.d("MediaButtonModule", "MediaSession action variable: " + action);
+                                                    Log.d("MediaButtonModule", "MediaSessionCompat action variable: " + action);
                                                     if (action != null) {
-                                                        Log.d("MediaButtonModule", "MediaSession sending JS event: " + action);
+                                                        Log.d("MediaButtonModule", "MediaSessionCompat sending JS event: " + action);
                                                         sendEvent(action);
                                                     }
                                                 }
                                             } else {
-                                                Log.d("MediaButtonModule", "MediaSession KeyEvent: null");
+                                                Log.d("MediaButtonModule", "MediaSessionCompat KeyEvent: null");
                                             }
                                         }
-                                        return super.onMediaButtonEvent(mediaButtonIntent);
+                                        return true;
                                     }
                                 });
-                                mediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
-                                PlaybackState state = new PlaybackState.Builder()
+                                PlaybackStateCompat state = new PlaybackStateCompat.Builder()
                                     .setActions(
-                                        PlaybackState.ACTION_PLAY |
-                                        PlaybackState.ACTION_PAUSE |
-                                        PlaybackState.ACTION_PLAY_PAUSE |
-                                        PlaybackState.ACTION_SKIP_TO_NEXT |
-                                        PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                                        PlaybackStateCompat.ACTION_PLAY |
+                                        PlaybackStateCompat.ACTION_PAUSE |
+                                        PlaybackStateCompat.ACTION_PLAY_PAUSE |
+                                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
+                                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
                                     )
-                                    .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
+                                    .setState(PlaybackStateCompat.STATE_PLAYING, 0, 1.0f)
                                     .build();
                                 mediaSession.setPlaybackState(state);
                                 mediaSession.setActive(true);
-                                Log.d("MediaButtonModule", "MediaSession created and activated");
+                                Log.d("MediaButtonModule", "MediaSessionCompat created and activated");
                             } catch (Exception e) {
                                 Log.e("MediaButtonModule", "Failed to create/activate MediaSession (main thread)", e);
                             }

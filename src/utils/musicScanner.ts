@@ -232,7 +232,12 @@ export async function scanMusic(): Promise<ScannedTrack[]> {
       dirsToCheck.push(RNFS.DocumentDirectoryPath);
     }
 
-    const exts = ['.mp3', '.m4a', '.flac', '.wav', '.aac', '.ogg'];
+    // Supported audio file extensions (see Android/ExoPlayer docs)
+    const exts = [
+      '.mp3','.m4a','.aac','.wav','.flac','.ogg','.opus',
+      '.amr','.3gp','.mp4','.mid','.midi','.xmf','.mxmf',
+      '.rtttl','.rtx','.ota','.imy',//'.wma','.aiff','.aif',
+    ];
     const found: ScannedTrack[] = [];
 
     const visited = new Set<string>();
@@ -248,6 +253,7 @@ export async function scanMusic(): Promise<ScannedTrack[]> {
       '/omr',
     ];
     async function scanDir(path: string) {
+      console.log(`[scanMusic] Entering directory: ${path}`);
       try {
         // skip excluded mount prefixes
         for (const p of excludedPathPrefixes) {
@@ -271,6 +277,12 @@ export async function scanMusic(): Promise<ScannedTrack[]> {
           `scanMusic: scanning dir ${path} (${items.length} entries)`,
         );
         for (const it of items) {
+          if (it.isFile() && it.name.toLowerCase().endsWith('.opus')) {
+            console.log(`[scanMusic] Found .opus file: ${it.path}`);
+          }
+          if (it.path && it.path.includes('Download')) {
+            console.log(`[scanMusic] Found file in Download: ${it.path}`);
+          }
           // skip hidden files/folders (names starting with a dot)
           if (it.name && it.name.startsWith('.')) continue;
           // skip paths with hidden segments like /foo/.bar/
@@ -315,8 +327,7 @@ export async function scanMusic(): Promise<ScannedTrack[]> {
           }
         }
       } catch (e) {
-        // ignore dir read errors but log for debugging
-        console.warn(`scanMusic: failed to read dir ${path}:`, e);
+        console.warn(`[scanMusic] Failed to read dir ${path}:`, e);
       }
     }
 

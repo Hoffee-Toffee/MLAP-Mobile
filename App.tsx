@@ -27,9 +27,17 @@ function MediaButtonHandler() {
     if (Platform.OS === 'android' && NativeModules.MediaButton) {
       const emitter = new NativeEventEmitter(NativeModules.MediaButton);
       const sub = emitter.addListener('MediaButton', (action: string) => {
-        if (action === 'playpause' || action === 'play' || action === 'pause') {
+        if (action === 'playpause') {
           if (typeof (globalThis as any).mediaButtonToggleAllQueues === 'function') {
             (globalThis as any).mediaButtonToggleAllQueues();
+          }
+        } else if (action === 'play') {
+          if (typeof (globalThis as any).mediaButtonPlayAllQueues === 'function') {
+            (globalThis as any).mediaButtonPlayAllQueues();
+          }
+        } else if (action === 'pause') {
+          if (typeof (globalThis as any).mediaButtonPauseAllQueues === 'function') {
+            (globalThis as any).mediaButtonPauseAllQueues();
           }
         }
       });

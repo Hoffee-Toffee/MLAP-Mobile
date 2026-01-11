@@ -2,12 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { TouchableOpacity, View, Text, StyleSheet, Pressable } from 'react-native';
 import { List, Avatar, useTheme } from 'react-native-paper';
 
+
 import { useMultiQueue } from '../context/MultiQueueContext';
 import { usePerQueuePlayer } from '../context/PerQueuePlayerContext';
+import { formatDuration } from '../utils/formatDuration';
 
 interface NowPlayingBarProps {
   onPress?: () => void;
 }
+
 
 const NowPlayingBar: React.FC<NowPlayingBarProps> = ({ onPress }) => {
   const { selectedQueue } = useMultiQueue();
@@ -15,20 +18,19 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({ onPress }) => {
   const playerState = players[selectedQueue];
   const { currentTrack, isPlaying, position, duration } = playerState;
   const theme = useTheme();
-  // Real-time progress bar update (poll context every 250ms)
-  const [progress, setProgress] = useState(() => duration ? Math.min(1, position / duration) : 0);
+  // Real-time progress bar update (animation frame, like full screen)
+  const [progress, setProgress] = useState(() => duration ? Math.max(0, Math.min(1, position / duration)) : 0);
   useEffect(() => {
     let mounted = true;
-    const interval = setInterval(() => {
+    function update() {
       if (!mounted) return;
       const p = players[selectedQueue]?.position ?? 0;
       const d = players[selectedQueue]?.duration ?? 0;
       setProgress(d ? Math.max(0, Math.min(1, p / d)) : 0);
-    }, 250);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
+      requestAnimationFrame(update);
+    }
+    update();
+    return () => { mounted = false; };
   }, [players, selectedQueue]);
   if (!currentTrack) return null;
   const navigation = require('@react-navigation/native').useNavigation();
@@ -42,7 +44,11 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({ onPress }) => {
         )}
         <View style={styles.infoContainer}>
           <Text numberOfLines={1} style={[styles.title, { color: theme.colors.onPrimary }]}>{currentTrack.title ?? 'Unknown'}</Text>
-          <Text numberOfLines={1} style={[styles.artist, { color: theme.colors.onPrimary }]}>{currentTrack.artist ?? 'Unknown artist'}</Text>
+          <Text numberOfLines={1} style={[styles.artist, { color: theme.colors.onPrimary, flexDirection: 'row', flexWrap: 'nowrap' }]}>
+            {formatDuration(duration)}
+            <Text style={{ color: theme.colors.onPrimary, opacity: 0.5 }}> • </Text>
+            {currentTrack.artist ?? 'Unknown artist'}
+          </Text>
           {/* mini progress bar with larger touch area */}
           <View style={[styles.progressBarBg, { backgroundColor: theme.colors.onBackground + '33' }]}>
             <View style={[styles.progressBar, { width: `${progress * 100}%`, backgroundColor: theme.colors.onPrimary }]} />

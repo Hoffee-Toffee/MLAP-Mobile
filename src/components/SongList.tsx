@@ -13,28 +13,39 @@ interface SongListProps {
 }
 
 const SongList: React.FC<SongListProps> = ({ tracks, scannedTracks, onSongPlay }) => {
-  const { playTrack, setQueue } = usePerQueuePlayer();
+  const { playTrack, setQueue, players } = usePerQueuePlayer();
   const { selectedQueue } = useMultiQueue();
   const theme = useTheme();
+  const currentTrackId = players[selectedQueue]?.currentTrack?.id;
+  const isPlaying = players[selectedQueue]?.isPlaying;
   return (
     <FlatList
       data={tracks}
       keyExtractor={(item) => item.id}
-      renderItem={({ item, index }) => (
-        <SongItem
-          track={item}
-          onPress={() => {
-            // Set the selected queue's player queue to tapped song + next 4, and start playback for that queue
-            const source = scannedTracks || tracks;
-            const q = [item, ...source.slice(index + 1, index + 5)];
-            setQueue(selectedQueue, q);
-            playTrack(selectedQueue, item);
-            if (onSongPlay) onSongPlay();
-          }}
-          textColor={theme.colors.onBackground}
-          backgroundColor={theme.colors.background}
-        />
-      )}
+      renderItem={({ item, index }) => {
+        // Find index of current track in the queue
+        const currentIdx = tracks.findIndex(t => t.id === currentTrackId);
+        // Dim all items above the current track (50% opacity)
+        const opacity = currentIdx !== -1 && index < currentIdx ? 0.5 : 1;
+        return (
+          <SongItem
+            track={item}
+            onPress={() => {
+              const source = scannedTracks || tracks;
+              const q = [item, ...source.slice(index + 1, index + 5)];
+              setQueue(selectedQueue, q);
+              playTrack(selectedQueue, item);
+              if (onSongPlay) onSongPlay();
+            }}
+            textColor={theme.colors.onBackground}
+            backgroundColor={theme.colors.background}
+            isCurrent={item.id === currentTrackId}
+            isPlaying={isPlaying}
+            theme={theme}
+            style={{ opacity }}
+          />
+        );
+      }}
       style={{ backgroundColor: theme.colors.background }}
     />
   );

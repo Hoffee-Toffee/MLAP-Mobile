@@ -243,6 +243,7 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
           title: t.title,
           artist: t.artist,
           album: t.album,
+          duration: t.duration,
           path: t.path,
           picture: t.picture,
         })),
@@ -267,6 +268,7 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
             title: t.title,
             artist: t.artist,
             album: t.album,
+            duration: t.duration,
             path: t.path,
             picture: t.picture,
           })),
@@ -388,10 +390,16 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
         // ignore
       }
       const durationMs = sound.getDuration() * 1000;
-      setPlayers(prev => ({
-        ...prev,
-        [queueId]: { ...prev[queueId], duration: durationMs }
-      }));
+      setPlayers(prev => {
+        // Update duration in PlayerState and in the queue's track object
+        const queue = prev[queueId].queue.map(t =>
+          t.id === track.id ? { ...t, duration: durationMs } : t
+        );
+        return {
+          ...prev,
+          [queueId]: { ...prev[queueId], duration: durationMs, queue }
+        };
+      });
       debugPlaybackLog(`[${queueId}] Loaded. Duration: ${durationMs}ms`);
       sound.play((success) => {
         debugPlaybackLog(`[${queueId}] play() callback fired. Success: ${success}`);
@@ -624,12 +632,11 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
   }, [players]);
 
   if (typeof globalThis !== 'undefined') {
+    // Toggle: current behavior
     (globalThis as any).mediaButtonToggleAllQueues = () => {
       const queueIds = ['queue1', 'queue2', 'queue3'] as QueueId[];
-      // Find all queues that are paused but have tracks
       const pausedWithTracks = queueIds.filter(qid => !players[qid].isPlaying && players[qid].queue.length > 0);
       if (pausedWithTracks.length > 0) {
-        // Resume all paused queues with tracks
         pausedWithTracks.forEach(qid => {
           const player = players[qid];
           if (player.currentTrack) {
@@ -639,11 +646,31 @@ export const PerQueuePlayerProvider: React.FC<{ children: React.ReactNode }> = (
           }
         });
       } else {
-        // Otherwise, pause all playing queues
         queueIds.forEach(qid => {
           if (players[qid].isPlaying) pause(qid);
         });
       }
+    };
+    // Play all: play all queues with tracks
+    (globalThis as any).mediaButtonPlayAllQueues = () => {
+      const queueIds = ['queue1', 'queue2', 'queue3'] as QueueId[];
+      queueIds.forEach(qid => {
+        const player = players[qid];
+        if (player.queue.length > 0) {
+          if (player.currentTrack) {
+            play(qid);
+          } else {
+            playTrack(qid, player.queue[0]);
+          }
+        }
+      });
+    };
+    // Pause all: pause all playing queues
+    (globalThis as any).mediaButtonPauseAllQueues = () => {
+      const queueIds = ['queue1', 'queue2', 'queue3'] as QueueId[];
+      queueIds.forEach(qid => {
+        if (players[qid].isPlaying) pause(qid);
+      });
     };
   }
 

@@ -132,8 +132,19 @@ public class NowPlayingNotificationModule extends ReactContextBaseJavaModule {
                 .addAction(android.R.drawable.ic_media_next, "Next", nextPending)
                 .setOngoing(isPlaying)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setOnlyAlertOnce(true)
-                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle());
+                .setOnlyAlertOnce(true);
+            // Attach MediaSession token if available
+            try {
+                Class<?> mediaButtonClass = Class.forName("com.mlap.MediaButtonModule");
+                android.support.v4.media.session.MediaSessionCompat mediaSession = (android.support.v4.media.session.MediaSessionCompat) mediaButtonClass.getField("mediaSessionInstance").get(null);
+                if (mediaSession != null) {
+                    builder.setStyle(new androidx.media.app.NotificationCompat.MediaStyle().setMediaSession(mediaSession.getSessionToken()));
+                } else {
+                    builder.setStyle(new androidx.media.app.NotificationCompat.MediaStyle());
+                }
+            } catch (Exception e) {
+                builder.setStyle(new androidx.media.app.NotificationCompat.MediaStyle());
+            }
 
             Log.d("NowPlayingNotif", "Notifying notificationManager with id=" + notificationId);
             notificationManager.notify(notificationId, builder.build());

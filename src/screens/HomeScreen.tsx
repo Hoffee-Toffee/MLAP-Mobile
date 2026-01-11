@@ -54,14 +54,18 @@ const HomeScreen: React.FC = () => {
         <Modal
           visible={drawerVisible}
           onDismiss={() => setDrawerVisible(false)}
-          contentContainerStyle={styles.drawerModal}
+          contentContainerStyle={[styles.drawerModal, { paddingTop: 0, paddingBottom: 0, height: '100%', justifyContent: 'flex-start' }]}
         >
-          <Drawer.Section title="Menu">
-            <Drawer.Item label="Library" icon="library-music" onPress={() => setDrawerVisible(false)} />
-            <Drawer.Item label="Playlists" icon="playlist-music" onPress={() => setDrawerVisible(false)} />
-            <Drawer.Item label="Queues" icon="queue-music" onPress={() => setDrawerVisible(false)} />
-            <Drawer.Item label="Settings" icon="cog" onPress={() => setDrawerVisible(false)} />
-          </Drawer.Section>
+          <View style={{ flex: 1, justifyContent: 'flex-start' }}>
+            <Drawer.Section style={{ backgroundColor: useTheme().colors.background, flex: 1, justifyContent: 'flex-start' }}>
+              {/* <Drawer.Item label="Library" icon="library-music" onPress={() => setDrawerVisible(false)} style={{ backgroundColor: useTheme().colors.background }} labelStyle={{ color: useTheme().colors.onBackground }} /> */}
+              {/* <Drawer.Item label="Playlists" icon="playlist-music" onPress={() => setDrawerVisible(false)} style={{ backgroundColor: useTheme().colors.background }} labelStyle={{ color: useTheme().colors.onBackground }} /> */}
+              {/* <Drawer.Item label="Queues" icon="queue-music" onPress={() => setDrawerVisible(false)} style={{ backgroundColor: useTheme().colors.background }} labelStyle={{ color: useTheme().colors.onBackground }} /> */}
+              <Drawer.Item label="Settings" icon="cog" onPress={() => setDrawerVisible(false)} style={{ backgroundColor: useTheme().colors.background }} labelStyle={{ color: useTheme().colors.onBackground }} />
+              <Drawer.Item style={{ height: 1, marginVertical: 8, backgroundColor: useTheme().colors.surfaceVariant, opacity: 0.5 }} />
+              <Drawer.Item label="Debug" icon="bug" onPress={() => { setDrawerVisible(false); navigation.navigate('Debug' as never); }} style={{ backgroundColor: useTheme().colors.background }} labelStyle={{ color: useTheme().colors.onBackground }} />
+            </Drawer.Section>
+          </View>
         </Modal>
       </Portal>
 
@@ -125,7 +129,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 300,
     backgroundColor: 'white',
-    paddingTop: 24,
+    paddingTop: 0,
+    paddingBottom: 0,
+    height: '100%',
+    justifyContent: 'flex-start',
   },
   nowPlayingModal: {
     flex: 1,

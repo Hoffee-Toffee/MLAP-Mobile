@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { List, Avatar, IconButton, Portal, useTheme } from 'react-native-paper';
 import { StyleSheet, View, Modal, TouchableWithoutFeedback, TouchableOpacity, Dimensions, Text } from 'react-native';
+
 import { ScannedTrack } from '../utils/musicScanner';
+import { formatDuration } from '../utils/formatDuration';
 
 export type ListItemType =
   | { type: 'folder'; name: string; count: number; onPress: () => void }
@@ -218,10 +220,21 @@ const ListItem: React.FC<ListItemProps> = ({
   } else if (item.type === 'song') {
     // Move SongItemLeft out of render
     const left = () => <SongItemLeft pic={item.track.picture} />;
+    // Show duration • artist for song items
+    // Defensive: ensure duration is a number (ms), fallback to 0 if missing
+    const duration = typeof item.track.duration === 'number' ? item.track.duration : 0;
+    const artist = item.track.artist ?? 'Unknown artist';
+    const durationStr = duration > 0 ? formatDuration(duration) : '';
     return (
       <List.Item
         title={item.track.title ?? 'Unknown'}
-        description={item.track.artist ?? 'Unknown artist'}
+        description={
+          <Text numberOfLines={1} style={{ flexDirection: 'row', flexWrap: 'nowrap', color: textColor || undefined }}>
+            {durationStr}
+            <Text style={{ opacity: 0.5 }}> • </Text>
+            {artist}
+          </Text>
+        }
         left={left}
         onPress={() => item.onPress()}
         right={renderRight}
